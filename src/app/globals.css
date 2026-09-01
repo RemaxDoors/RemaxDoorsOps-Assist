@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   remax DOORS — Operation Help
+   Theme lifted from remaxdoors.com: Montserrat, black headings, grey body
+   copy, brand red #EA0029 for accents and actions, light grey section bands.
+--------------------------------------------------------------------------- */
+@theme {
+  --color-brand-red: #ea0029;
+  --color-brand-red-dark: #c30022;
+  --color-brand-red-soft: #fdeaee;
+
+  --color-ink: #000000;
+  --color-ink-body: #666666;
+  --color-ink-muted: #8a8a8a;
+
+  --color-line: #e0e0e0;
+  --color-canvas: #f4f4f4;
+  --color-surface: #ffffff;
+  --color-band: #ededed;
+
+  --color-ok: #1f7a4d;
+  --color-ok-soft: #e8f4ee;
+  --color-warn: #8a5a00;
+  --color-warn-soft: #fbf1e0;
+  --color-danger: #c30022;
+  --color-danger-soft: #fdeaee;
+
+  --radius-card: 4px;
+  --font-sans: var(--font-montserrat), Helvetica, Arial, sans-serif;
+}
+
+/* No height:100% here — the app shell already uses min-h-screen, and pinning
+   the height stops bottom padding from creating real scroll room, which lets
+   the fixed cookie banner sit on top of buttons. */
+body {
+  background: var(--color-surface);
+  color: var(--color-ink-body);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--color-ink);
+  letter-spacing: -0.01em;
+}
+
+/* The brandmark's chevron angle, used as a thin accent rule. */
+.brand-rule {
+  background: linear-gradient(
+    90deg,
+    var(--color-brand-red) 0%,
+    var(--color-brand-red) 55%,
+    var(--color-ink) 55%,
+    var(--color-ink) 100%
+  );
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-brand-red);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
