@@ -213,6 +213,85 @@ Worth telling users before they discover them:
 
 ---
 
+## Hosting on Azure App Service
+
+### Shape
+
+**One** App Service app. The UI and the API are one Next.js application — the
+API routes live in `src/app/api` and are served by the same process — so a
+second "API" app would double the hosting, split the session cookie across two
+origins, and gain nothing. Split only if an external system ever needs its own
+scaling or network exposure.
+
+There is no separate application server to run. `next start` *is* the server;
+it listens on the `PORT` App Service assigns.
+
+### Docker: not required
+
+App Service runs Node natively, and nothing here needs a native build step
+(`mssql` is pure JavaScript). A Dockerfile buys reproducibility and an exact
+Node version at the cost of a registry and a longer build. Start without it;
+`engines.node` pins the version for App Service.
+
+### The two hard problems
+
+Both come from the app straddling the office network and the cloud.
+
+**1. Reaching M1.** `DB_SERVER=GIZEME` is a machine on the office LAN. An
+App Service app cannot reach it by default. Options, cheapest first:
+
+- **Hybrid Connections** — an App Service feature that tunnels a single
+  `host:port` (here, the SQL Server) through a relay agent installed on a
+  Windows machine on the LAN. No VPN, no network redesign. Best fit here.
+- **VNet integration + site-to-site VPN or ExpressRoute** — the standard
+  enterprise answer, and heavier: it needs a gateway and network work.
+
+**2. Attachments.** M1 stores the path the app writes and users open it from
+the ERP. An Azure-hosted app cannot write to an office file share, and an
+office PC cannot open an Azure local path. Choose one:
+
+- **Keep files on the office share.** Simplest for M1 users, but then the app
+  should stay on-premises too, which makes Azure the wrong host.
+- **Store in Azure Blob Storage and record a URL** instead of a UNC path. M1's
+  `ucmaSimproLink` column already proves a URL works there, and the VB button
+  opens one. This needs a small code change in `attachment.repo.ts` and a
+  decision about who can read the container.
+
+**Decide this before creating Azure resources** — it determines whether Azure
+is the right host at all. If attachments must stay on the office share, hosting
+the app on the office server (Phase 1.6) is the simpler and cheaper answer.
+
+### Resource group
+
+Use an existing group only if this app shares its owner, environment,
+permissions and lifecycle. Otherwise create a dedicated one — grouping by
+company name alone makes deletion and access control awkward later. A single
+group holding the Web App, its plan, Application Insights and Key Vault is the
+usual shape.
+
+### Custom domain
+
+1. App Service → Custom domains → Add, e.g. `ops.remaxdoors.com`.
+2. Add the CNAME and TXT records Azure shows, at your DNS provider.
+3. Create a free **App Service Managed Certificate** and bind it.
+4. Turn on **HTTPS Only**.
+5. Set `APP_BASE_URL=https://ops.remaxdoors.com`, and add
+   `https://ops.remaxdoors.com/api/auth/callback` as an Entra redirect URI.
+
+Steps 4 and 5 are not optional: the session cookie is only marked `Secure` in
+production, and Entra will reject a redirect URI that does not match exactly.
+
+### Settings
+
+Put every value from `.env.local` into App Service **Application settings**
+(or Key Vault references). Do not deploy `.env.local` — it is git-ignored and
+should stay that way. `AUTH_DEV_BYPASS` must be `false`; a production build
+ignores it regardless, which is verified behaviour.
+
+Set the health check path to `/api/health`.
+
+---
+
 ## Release checklist
 
 - [ ] `ops_assist_app` login created and in use; `sa` no longer in any config
@@ -229,3 +308,7 @@ Worth telling users before they discover them:
 - [ ] Attachment share included in backups
 - [ ] Uptime monitor on `/api/health`
 - [ ] Repository moved off the personal account
+- [ ] Attachment storage decided (office share vs Azure Blob + URL)
+- [ ] M1 connectivity proven from the host (Hybrid Connection or VPN)
+- [ ] Custom domain bound, HTTPS Only on, Entra redirect URI matching
+- [ ] App settings populated in Azure; `.env.local` not deployed
