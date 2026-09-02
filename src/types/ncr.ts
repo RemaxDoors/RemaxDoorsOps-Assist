@@ -84,3 +84,26 @@ export const DIMENSION_LABELS: Record<Dimension, string> = {
   code: "Code",
   cause: "Cause",
 };
+
+/**
+ * Recording a corrective action, and optionally closing the NCR.
+ *
+ * Closing requires the corrective action to say something: an NCR marked
+ * complete with no explanation is worse than one left open, because it looks
+ * resolved and cannot be audited.
+ */
+export const ncrUpdateSchema = z
+  .object({
+    correctiveAction: z.string().trim().max(8000),
+    complete: z.coerce.boolean(),
+    assignedTo: z.string().trim().max(10).optional(),
+  })
+  .refine(
+    (value) => !value.complete || value.correctiveAction.trim().length >= 10,
+    {
+      message: "Describe the corrective action before marking it complete",
+      path: ["correctiveAction"],
+    },
+  );
+
+export type NcrUpdateInput = z.infer<typeof ncrUpdateSchema>;

@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { RefreshButton } from "@/components/ui/RefreshButton";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TaskButton } from "@/app/(app)/ncr/[id]/TaskButton";
+import { CorrectiveActionForm } from "@/app/(app)/ncr/[id]/CorrectiveActionForm";
 import { isSimproConfigured } from "@/lib/simpro/client";
 import { getNcr } from "@/lib/repositories/ncr.repo";
 import { listNcrAttachments } from "@/lib/repositories/attachment.repo";
@@ -37,16 +38,18 @@ export default async function NcrDetailPage({
   let ncr: Ncr | null;
   let attachments: NcrAttachment[] = [];
   let staff: Map<string, string>;
+  let employees: Awaited<ReturnType<typeof listEmployees>> = [];
 
   try {
-    const [record, files, employees] = await Promise.all([
+    const [record, files, people] = await Promise.all([
       getNcr(id),
       listNcrAttachments(id),
       listEmployees(),
     ]);
     ncr = record;
     attachments = files;
-    staff = new Map(employees.map((e) => [e.id, e.name]));
+    employees = people;
+    staff = new Map(people.map((e) => [e.id, e.name]));
   } catch (error) {
     return <DbError error={error} />;
   }
@@ -176,14 +179,18 @@ export default async function NcrDetailPage({
         </CardBody>
       </Card>
 
-      <Card className="mt-4">
-        <CardHeader title="Corrective action" />
-        <CardBody>
-          <p className="text-sm whitespace-pre-wrap text-ink-body">
-            {ncr.correctiveAction || "No corrective action recorded yet."}
-          </p>
-        </CardBody>
-      </Card>
+      <div className="mt-4">
+        <CorrectiveActionForm
+          ncrId={ncr.id}
+          initialText={ncr.correctiveAction ?? ""}
+          initialComplete={ncr.status === "Closed"}
+          initialAssignedTo={ncr.assignedTo ?? ""}
+          closedOn={
+            ncr.correctiveActionDate ? formatDate(ncr.correctiveActionDate) : null
+          }
+          employees={employees}
+        />
+      </div>
     </>
   );
 }

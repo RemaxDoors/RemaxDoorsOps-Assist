@@ -8,12 +8,14 @@ import {
   updateRow,
   type Condition,
 } from "@/lib/db/gateway";
+import { toRtf } from "@/lib/m1/rtf";
 import type {
   Dimension,
   Lookup,
   Ncr,
   NcrCreateInput,
   NcrFilter,
+  NcrUpdateInput,
   NcrStatus,
   Period,
 } from "@/types/ncr";
@@ -211,6 +213,8 @@ export async function createNcr(
     qarNonConformanceCauseID: input.causeId ?? "",
     qarCorrectiveActionComplete: false,
     qarNonConformanceText: input.description,
+    // M1 stores both; its client reads the RTF and back-fills it otherwise.
+    qarNonConformanceRTF: toRtf(input.description),
     qarQuantity: input.quantity,
     qarReportedByEmployeeID: input.reportedBy,
     uqarAssignedToEmployeeID: input.assignedTo ?? "",
@@ -421,4 +425,44 @@ export async function periodActivity(
   ]);
 
   return { raised, solved, raisedYearAgo, solvedYearAgo, comparable: true };
+}
+
+/**
+ * Records a corrective action and, when marked complete, closes the NCR.
+ *
+ * `qarCorrectiveActionDate` is what the dashboard counts as "solved", so it is
+ * set on completion and cleared if an NCR is reopened — otherwise a reopened
+ * record would still count as solved this month.
+ */
+export async function updateCorrectiveAction(
+  ncrId: string,
+  input: NcrUpdateInput,
+): Promise<Ncr | null> {
+  const existing = await getNcr(ncrId);
+  if (!existing) return null;
+
+  const values: Record<string, unknown> = {
+    qarCorrectiveActionText: input.correctiveAction,
+    qarCorrectiveActionRTF: input.correctiveAction.trim()
+      ? toRtf(input.correctiveAction)
+      : "",
+    qarCorrectiveActionComplete: input.complete,
+  };
+
+  if (input.assignedTo !== undefined) {
+    values.uqarAssignedToEmployeeID = input.assignedTo;
+  }
+
+  if (input.complete) {
+    // Keep the original completion date if it was already closed, so editing
+    // the wording of a closed NCR does not move it into this month.
+    values.qarCorrectiveActionDate = existing.correctiveActionDate
+      ? new Date(existing.correctiveActionDate)
+      : new Date();
+  } else {
+    values.qarCorrectiveActionDate = null;
+  }
+
+  const affected = await updateRow("ncr", ncrId, values);
+  return affected > 0 ? getNcr(ncrId) : null;
 }

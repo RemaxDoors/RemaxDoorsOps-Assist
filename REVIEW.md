@@ -25,7 +25,15 @@ Worth keeping as-is, so the rework below does not disturb it.
 
 ## 1. Critical — the app does not support two of its three users
 
-### 1.1 An NCR can be created and read, but never updated
+### 1.1 An NCR can be created and read, but never updated — DONE
+
+*Implemented: `/ncr/[id]` now carries a corrective action form writing
+`qarCorrectiveActionText`, `qarCorrectiveActionRTF`,
+`qarCorrectiveActionComplete`, `qarCorrectiveActionDate` and
+`uqarAssignedToEmployeeID`. Closing requires a corrective action; reopening
+clears the completion date so a reopened NCR stops counting as solved.*
+
+Original finding:
 
 `updateRow` is called in exactly one place, to store a Simpro task id. There is
 **no way to record a corrective action, assign someone, or close an NCR.**
@@ -184,7 +192,7 @@ Grouped by what unblocks the most people per unit of work.
 
 | # | Item | Why first |
 | --- | --- | --- |
-| 1 | Corrective action + close (1.1) | Two of three user groups cannot work without it |
+| ~~1~~ | ~~Corrective action + close (1.1)~~ | **Done** |
 | 2 | Mobile list cards (2.1) + actions (2.2) | The tech's primary device is unusable for browsing |
 | 3 | Entra → M1 employee mapping | Prerequisite for "my NCRs" and for recording who closed one |
 | 4 | Attachment viewing (1.2) | Photos are the point of the attachment feature |
