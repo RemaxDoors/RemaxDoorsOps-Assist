@@ -53,8 +53,12 @@ export const tables = {
       uqarAssignedToEmployeeID: "string",
       qarCreatedBy: "string",
       qarCreatedDate: "datetime",
-      // User-defined columns; see m1/M1-Setup.md. The app checks they exist
-      // before writing, so it works before a DBA has added them.
+      /**
+       * User-defined columns; see m1/M1-Setup.md. Deliberately absent from
+       * `readable`: readRows selects every readable column by default, so
+       * naming a column the DBA has not added yet would break every NCR read.
+       * Writes are guarded by columnExists().
+       */
       uqarSimproTaskID: "string",
       uqarSimproJobID: "string",
     },
@@ -75,8 +79,6 @@ export const tables = {
       "uqarAssignedToEmployeeID",
       "qarCreatedBy",
       "qarCreatedDate",
-      "uqarSimproTaskID",
-      "uqarSimproJobID",
     ],
     // Opened for the Add NCR wizard. The ID itself is allocated by the
     // gateway's insertRowWithAllocatedId, not passed in by callers.
