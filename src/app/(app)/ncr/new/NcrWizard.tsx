@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/AttachmentPicker";
 import { JobStep, type JobSelection } from "@/app/(app)/ncr/new/JobStep";
 import { CreateTaskDialog } from "@/components/ui/CreateTaskDialog";
+import { IdlePrompt } from "@/components/ui/IdlePrompt";
 import type { Employee } from "@/lib/repositories/employee.repo";
 import type { Lookup } from "@/types/ncr";
 
@@ -293,8 +294,19 @@ export function NcrWizard({
     );
   }
 
+  function restart() {
+    setDraft(EMPTY);
+    setFiles([]);
+    setErrors({});
+    setBanner(null);
+    setStep(0);
+  }
+
   return (
     <div className="space-y-4">
+      {/* Only while the form is being filled in — not after it is saved. */}
+      <IdlePrompt label="this NCR" onRestart={restart} />
+
       <Card>
         <CardBody className="py-4">
           <Stepper steps={STEPS} current={step} />

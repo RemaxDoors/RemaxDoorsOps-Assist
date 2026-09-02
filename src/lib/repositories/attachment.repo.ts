@@ -1,5 +1,5 @@
 import "server-only";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { insertRowWithAllocatedId, readRows } from "@/lib/db/gateway";
 import { uploadSimproJobAttachment } from "@/lib/simpro/client";
@@ -50,6 +50,26 @@ function safeName(ncrId: string, originalName: string) {
     .replace(/[^a-zA-Z0-9._-]/g, "_")
     .slice(-80);
   return `NCR-${ncrId}-${Date.now()}-${base}`;
+}
+
+/**
+ * Writes an uploaded file to the attachment store and returns its full path.
+ *
+ * Split out from saveNcrAttachment so a submission queued while M1 is down can
+ * still keep its photos — the M1 row is written later, once there is an NCR
+ * number to attach it to.
+ */
+export async function storeAttachmentFile(
+  ncrId: string,
+  file: File,
+): Promise<string> {
+  const dir = attachmentDir();
+  const filename = safeName(ncrId, file.name || "upload");
+  const target = path.join(dir, filename);
+
+  await mkdir(dir, { recursive: true });
+  await writeFile(target, Buffer.from(await file.arrayBuffer()));
+  return target;
 }
 
 export async function saveNcrAttachment({
@@ -159,4 +179,69 @@ export async function listNcrAttachments(ncrId: string): Promise<NcrAttachment[]
       : null,
     createdBy: String(row.cmaCreatedBy ?? "").trim() || null,
   }));
+}
+
+/**
+ * Records an already-stored file against an NCR.
+ *
+ * Used when draining the queue: the file was written to the attachment store
+ * while M1 was down, so only the M1 row and the optional Simpro copy remain.
+ */
+export async function recordQueuedAttachment({
+  ncrId,
+  filePath,
+  description,
+  createdBy,
+  jobId,
+  partId,
+  simproJobId,
+}: {
+  ncrId: string;
+  filePath: string;
+  description: string;
+  createdBy: string;
+  jobId?: string | null;
+  partId?: string | null;
+  simproJobId?: string | null;
+}): Promise<SavedAttachment> {
+  const filename = path.basename(filePath);
+  const contents = await readFile(filePath);
+
+  let simproLink: string | null = null;
+  let warning: string | null = null;
+  if (simproJobId) {
+    try {
+      const uploaded = await uploadSimproJobAttachment({
+        jobId: simproJobId,
+        ncrId,
+        filename,
+        contents,
+      });
+      simproLink = uploaded.url;
+    } catch (error) {
+      warning = `Stored, but the Simpro copy failed: ${
+        error instanceof Error ? error.message : "unknown error"
+      }`;
+    }
+  }
+
+  const now = new Date();
+  const id = await insertRowWithAllocatedId("attachment", {
+    cmaAttachmentTypeID: attachmentTypeFor(
+      filename.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/",
+    ),
+    cmaDate: now,
+    cmaShortDescription: description.slice(0, 70),
+    cmaFileLocation: filePath,
+    cmaFilename: filename,
+    cmaNonConformanceID: ncrId,
+    cmaJobID: jobId ?? "",
+    cmaPartID: partId ?? "",
+    cmaUploadedFromWeb: true,
+    ucmaSimproLink: (simproLink ?? "").slice(0, 255),
+    cmaCreatedBy: createdBy.slice(0, 20),
+    cmaCreatedDate: now,
+  });
+
+  return { id, filename, location: filePath, simproLink, warning };
 }

@@ -78,7 +78,7 @@ can reach the port. Register the app in Entra ID with redirect URI
 
 Raised while building; none of it is real.
 
-**M1** — NCRs `10586`, `10587` (and their attachment rows `61411`–`61413`),
+**M1** — NCRs `10586`, `10587`, `10592` (queue drain test) (and their attachment rows `61411`–`61413`),
 plus whatever the later flow tests created (`10589`, `10591`).
 
 **Simpro QA** — tasks `42004`, `42005`, `42006`, `42008`, `42009`; job notes
