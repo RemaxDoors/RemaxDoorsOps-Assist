@@ -55,3 +55,32 @@ export const ncrCreateSchema = z.object({
 });
 
 export type NcrCreateInput = z.infer<typeof ncrCreateSchema>;
+
+/* ----------------------------------------------------------- dashboard --- */
+
+export const PERIODS = ["day", "month", "year", "all"] as const;
+export type Period = (typeof PERIODS)[number];
+
+export const PERIOD_LABELS: Record<Period, string> = {
+  day: "today",
+  month: "this month",
+  year: "this year",
+  all: "all time",
+};
+
+export const PERIOD_OPTIONS: Record<Period, string> = {
+  day: "Today",
+  month: "This month",
+  year: "This year",
+  all: "All time",
+};
+
+/** The three ways M1 classifies a non-conformance. */
+export const DIMENSIONS = ["category", "code", "cause"] as const;
+export type Dimension = (typeof DIMENSIONS)[number];
+
+export const DIMENSION_LABELS: Record<Dimension, string> = {
+  category: "Category",
+  code: "Code",
+  cause: "Cause",
+};

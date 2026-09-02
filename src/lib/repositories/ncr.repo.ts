@@ -9,11 +9,13 @@ import {
   type Condition,
 } from "@/lib/db/gateway";
 import type {
+  Dimension,
   Lookup,
   Ncr,
   NcrCreateInput,
   NcrFilter,
   NcrStatus,
+  Period,
 } from "@/types/ncr";
 
 /**
@@ -252,73 +254,171 @@ export async function setNcrSimproReference(
     : { stored: false, message: `NCR ${ncrId} was not found when storing the task id.` };
 }
 
-/** One slice of the category breakdown. */
-export type CategoryCount = { id: string; label: string; count: number };
+/* ------------------------------------------------------------ dashboard --- */
 
-export async function countByCategory(): Promise<CategoryCount[]> {
+export type DateRange = { from: Date | null; to: Date | null };
+
+/** The window a period covers, and the same window a year earlier. */
+export function periodRange(period: Period, now = new Date()): DateRange {
+  switch (period) {
+    case "day": {
+      const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return { from, to: new Date(from.getTime() + 86_400_000) };
+    }
+    case "month": {
+      const from = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { from, to: new Date(now.getFullYear(), now.getMonth() + 1, 1) };
+    }
+    case "year": {
+      const from = new Date(now.getFullYear(), 0, 1);
+      return { from, to: new Date(now.getFullYear() + 1, 0, 1) };
+    }
+    case "all":
+      return { from: null, to: null };
+  }
+}
+
+export function shiftYear(range: DateRange, years: number): DateRange {
+  const shift = (d: Date | null) =>
+    d ? new Date(d.getFullYear() + years, d.getMonth(), d.getDate()) : null;
+  return { from: shift(range.from), to: shift(range.to) };
+}
+
+/** Restricts a query to when the NCR was raised. */
+function raisedWithin(range: DateRange): Condition[] {
+  const where: Condition[] = [];
+  if (range.from) where.push({ column: "qarCreatedDate", op: "gte", value: range.from });
+  if (range.to) where.push({ column: "qarCreatedDate", op: "lt", value: range.to });
+  return where;
+}
+
+/** Restricts a query to when the corrective action was completed. */
+function solvedWithin(range: DateRange): Condition[] {
+  const where: Condition[] = [
+    { column: "qarCorrectiveActionComplete", op: "eq", value: true },
+  ];
+  if (range.from)
+    where.push({ column: "qarCorrectiveActionDate", op: "gte", value: range.from });
+  if (range.to)
+    where.push({ column: "qarCorrectiveActionDate", op: "lt", value: range.to });
+  return where;
+}
+
+const DIMENSION_COLUMN: Record<Dimension, string> = {
+  category: "qarNonConformanceCategoryID",
+  code: "qarNonConformanceCodeID",
+  cause: "qarNonConformanceCauseID",
+};
+
+export type Slice = { id: string; label: string; count: number };
+
+/**
+ * Counts by category, code or cause over a window.
+ *
+ * Blank ids are real in M1 — plenty of records were never classified — so they
+ * are kept and named rather than dropped, which would quietly change the total.
+ */
+export async function breakdown(
+  dimension: Dimension,
+  range: DateRange,
+): Promise<Slice[]> {
   const [grouped, maps] = await Promise.all([
-    countGrouped("ncr", "qarNonConformanceCategoryID"),
+    countGrouped("ncr", DIMENSION_COLUMN[dimension], raisedWithin(range)),
     lookups(),
   ]);
 
-  return grouped.map((row) => ({
-    id: row.value,
-    label:
-      maps.categories.get(row.value)?.description ||
-      (row.value ? row.value : "Uncategorised"),
+  const map =
+    dimension === "category"
+      ? maps.categories
+      : dimension === "code"
+        ? maps.codes
+        : maps.causes;
+
+  const rows = grouped.map((row) => ({
+    id: row.value || "(none)",
+    label: map.get(row.value)?.description || (row.value ? row.value : "Not recorded"),
     count: row.count,
   }));
+
+  // M1 allows two codes to carry the same description, so qualify duplicates
+  // with the code itself rather than showing the same label twice.
+  const seen = new Map<string, number>();
+  for (const row of rows) seen.set(row.label, (seen.get(row.label) ?? 0) + 1);
+
+  return rows.map((row) =>
+    (seen.get(row.label) ?? 0) > 1 && row.id !== "(none)"
+      ? { ...row, label: `${row.label} (${row.id})` }
+      : row,
+  );
 }
 
 export type ReporterCount = { id: string; count: number };
 
 /** Who raises non-conformances, busiest first. */
-export async function countByReporter(): Promise<ReporterCount[]> {
-  const grouped = await countGrouped("ncr", "qarReportedByEmployeeID");
+export async function countByReporter(range: DateRange): Promise<ReporterCount[]> {
+  const grouped = await countGrouped(
+    "ncr",
+    "qarReportedByEmployeeID",
+    raisedWithin(range),
+  );
   return grouped
     .filter((row) => row.value.length > 0)
     .map((row) => ({ id: row.value, count: row.count }));
 }
 
-export type MonthlyActivity = {
-  raisedThisMonth: number;
-  solvedThisMonth: number;
-  raisedLastMonth: number;
-  solvedLastMonth: number;
+export type PeriodActivity = {
+  raised: number;
+  solved: number;
+  raisedYearAgo: number;
+  solvedYearAgo: number;
+  /** False when there is no meaningful prior window to compare against. */
+  comparable: boolean;
 };
 
 /**
- * This month against last, so the headline numbers have something to mean.
- * "Solved" is a corrective action completed within the month, which is not the
- * same as an NCR raised that month.
+ * Raised and solved in the window, against the same window a year earlier.
+ *
+ * The comparison window is truncated to the same point in the year, so a part
+ * of this year is measured against the same part of last year rather than
+ * against the whole of it — otherwise every in-progress period reads as a
+ * collapse. "All time" has no prior window, so it reports no comparison.
  */
-export async function monthlyActivity(): Promise<MonthlyActivity> {
-  const now = new Date();
-  const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-
-  const raisedBetween = (from: Date, to?: Date) =>
-    countRows("ncr", [
-      { column: "qarCreatedDate", op: "gte", value: from },
-      ...(to ? [{ column: "qarCreatedDate", op: "lt" as const, value: to }] : []),
+export async function periodActivity(
+  range: DateRange,
+  now = new Date(),
+): Promise<PeriodActivity> {
+  if (!range.from) {
+    const [raised, solved] = await Promise.all([
+      countRows("ncr", raisedWithin(range)),
+      countRows("ncr", solvedWithin(range)),
     ]);
+    return {
+      raised,
+      solved,
+      raisedYearAgo: 0,
+      solvedYearAgo: 0,
+      comparable: false,
+    };
+  }
 
-  const solvedBetween = (from: Date, to?: Date) =>
-    countRows("ncr", [
-      { column: "qarCorrectiveActionComplete", op: "eq", value: true },
-      { column: "qarCorrectiveActionDate", op: "gte", value: from },
-      ...(to
-        ? [{ column: "qarCorrectiveActionDate", op: "lt" as const, value: to }]
-        : []),
-    ]);
+  const lastYear = shiftYear(range, -1);
+  // Still inside the current window: stop last year's at the same moment.
+  if (range.to && range.to > now) {
+    lastYear.to = new Date(
+      now.getFullYear() - 1,
+      now.getMonth(),
+      now.getDate(),
+      now.getHours(),
+      now.getMinutes(),
+    );
+  }
 
-  const [raisedThisMonth, solvedThisMonth, raisedLastMonth, solvedLastMonth] =
-    await Promise.all([
-      raisedBetween(startOfThisMonth),
-      solvedBetween(startOfThisMonth),
-      raisedBetween(startOfLastMonth, startOfThisMonth),
-      solvedBetween(startOfLastMonth, startOfThisMonth),
-    ]);
+  const [raised, solved, raisedYearAgo, solvedYearAgo] = await Promise.all([
+    countRows("ncr", raisedWithin(range)),
+    countRows("ncr", solvedWithin(range)),
+    countRows("ncr", raisedWithin(lastYear)),
+    countRows("ncr", solvedWithin(lastYear)),
+  ]);
 
-  return { raisedThisMonth, solvedThisMonth, raisedLastMonth, solvedLastMonth };
+  return { raised, solved, raisedYearAgo, solvedYearAgo, comparable: true };
 }

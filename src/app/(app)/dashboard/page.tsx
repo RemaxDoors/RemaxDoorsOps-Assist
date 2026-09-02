@@ -9,18 +9,27 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { DbError } from "@/components/ui/DbError";
 import { DonutChart } from "@/components/charts/DonutChart";
 import { BarChart } from "@/components/charts/BarChart";
+import { DashboardFilters } from "@/app/(app)/dashboard/DashboardFilters";
 import {
-  countByCategory,
+  breakdown,
   countByReporter,
   countByStatus,
   countUnassigned,
   listNcrs,
-  monthlyActivity,
-  type CategoryCount,
-  type MonthlyActivity,
+  periodActivity,
+  periodRange,
   type NcrCounts,
+  type PeriodActivity,
   type ReporterCount,
+  type Slice,
 } from "@/lib/repositories/ncr.repo";
+import {
+  DIMENSIONS,
+  DIMENSION_LABELS,
+  PERIOD_LABELS,
+  type Dimension,
+  type Period,
+} from "@/types/ncr";
 import { employeeNameMap } from "@/lib/repositories/employee.repo";
 import { formatDate, daysSince } from "@/lib/format";
 import type { Ncr } from "@/types/ncr";
@@ -29,29 +38,50 @@ export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Dashboard — Operation Help" };
 
-export default async function DashboardPage() {
+function parsePeriod(value: unknown): Period {
+  return value === "day" || value === "month" || value === "year" || value === "all"
+    ? value
+    : "year";
+}
+
+function parseDimension(value: unknown): Dimension {
+  return DIMENSIONS.includes(value as Dimension) ? (value as Dimension) : "category";
+}
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const period = parsePeriod(params.period);
+  const dimension = parseDimension(params.dimension);
+  const range = periodRange(period);
+
   let counts: NcrCounts;
   let unassigned = 0;
   let recent: Ncr[] = [];
-  let categories: CategoryCount[] = [];
+  let slices: Slice[] = [];
   let reporters: ReporterCount[] = [];
-  let month: MonthlyActivity;
+  let activity: PeriodActivity;
   let staff: Map<string, string>;
 
   try {
-    [counts, unassigned, recent, categories, reporters, month, staff] =
+    [counts, unassigned, recent, slices, reporters, activity, staff] =
       await Promise.all([
         countByStatus(),
         countUnassigned(),
         listNcrs({ limit: 6 }),
-        countByCategory(),
-        countByReporter(),
-        monthlyActivity(),
+        breakdown(dimension, range),
+        countByReporter(range),
+        periodActivity(range),
         employeeNameMap(),
       ]);
   } catch (error) {
     return <DbError error={error} />;
   }
+
+  const inPeriod = slices.reduce((sum, slice) => sum + slice.count, 0);
 
   // Top raisers only: the tail is a long list of people with one or two each.
   const topReporters = reporters.slice(0, 8).map((row) => ({
@@ -60,12 +90,24 @@ export default async function DashboardPage() {
     count: row.count,
   }));
 
-  const delta = (now: number, before: number) => {
-    if (before === 0) return now === 0 ? "Same as last month" : "None last month";
-    const change = Math.round(((now - before) / before) * 100);
-    if (change === 0) return "Level with last month";
-    return `${change > 0 ? "+" : ""}${change}% on last month (${before})`;
+  /**
+   * Year-on-year against the same slice of last year, stated plainly. The
+   * window is truncated to today's date, so "this year" compares like for like.
+   */
+  const versusLastYear = (current: number, before: number) => {
+    if (!activity.comparable) return "No prior window to compare";
+    const sameTime = period === "year" ? " to this date" : "";
+    if (before === 0) {
+      return current === 0
+        ? `None a year ago${sameTime} either`
+        : `None a year ago${sameTime}`;
+    }
+    const change = Math.round(((current - before) / before) * 100);
+    if (change === 0) return `Level with last year${sameTime} (${before})`;
+    return `${change > 0 ? "+" : ""}${change}% vs last year${sameTime} (${before})`;
   };
+
+  const periodLabel = PERIOD_LABELS[period];
 
   return (
     <>
@@ -85,11 +127,26 @@ export default async function DashboardPage() {
         }
       />
 
+      <DashboardFilters period={period} dimension={dimension} />
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Open NCRs"
+          label={`Raised ${periodLabel}`}
+          value={activity.raised}
+          hint={versusLastYear(activity.raised, activity.raisedYearAgo)}
+          href="/ncr"
+          accent="red"
+        />
+        <StatCard
+          label={`Solved ${periodLabel}`}
+          value={activity.solved}
+          hint={versusLastYear(activity.solved, activity.solvedYearAgo)}
+          href="/ncr?status=Closed"
+        />
+        <StatCard
+          label="Open now"
           value={counts.Open}
-          hint="Corrective action outstanding"
+          hint="Corrective action outstanding, all time"
           href="/ncr?status=Open"
           accent="red"
         />
@@ -98,19 +155,6 @@ export default async function DashboardPage() {
           value={unassigned}
           hint="Open with nobody named"
           href="/ncr?status=Open"
-          accent="red"
-        />
-        <StatCard
-          label="Raised this month"
-          value={month.raisedThisMonth}
-          hint={delta(month.raisedThisMonth, month.raisedLastMonth)}
-          href="/ncr"
-        />
-        <StatCard
-          label="Solved this month"
-          value={month.solvedThisMonth}
-          hint={delta(month.solvedThisMonth, month.solvedLastMonth)}
-          href="/ncr?status=Closed"
           accent="light"
         />
       </div>
@@ -118,22 +162,18 @@ export default async function DashboardPage() {
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader
-            title="By category"
-            subtitle={`${counts.total} records, all time`}
+            title={`By ${DIMENSION_LABELS[dimension].toLowerCase()}`}
+            subtitle={`${inPeriod} raised ${periodLabel}`}
           />
           <CardBody>
-            <DonutChart
-              slices={categories}
-              total={counts.total}
-              centreLabel="records"
-            />
+            <DonutChart slices={slices} total={inPeriod} centreLabel="raised" />
           </CardBody>
         </Card>
 
         <Card>
           <CardHeader
             title="Who raises them"
-            subtitle="Busiest eight, all time"
+            subtitle={`Busiest eight, ${periodLabel}`}
           />
           <CardBody>
             <BarChart bars={topReporters} />
@@ -141,7 +181,7 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      <Card className="mt-6">
+      <Card className="mt-4">
         <CardHeader
           title="Latest non-conformances"
           subtitle="Most recently created in M1"

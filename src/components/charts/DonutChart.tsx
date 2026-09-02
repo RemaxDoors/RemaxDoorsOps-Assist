@@ -21,8 +21,10 @@ const SERIES = [
   "#eda100",
   "#e87ba4",
   "#008300",
-  "#4a3aa7",
 ] as const;
+
+/** Anything past the palette folds into one grey rest-of-field. */
+const OTHER = "#9a9a95";
 
 const SIZE = 190;
 const RADIUS = 82;
@@ -77,8 +79,23 @@ export function DonutChart({
     );
   }
 
+  /**
+   * Never generate an extra hue: past the palette the tail becomes a single
+   * "Other" slice. A generated colour would be indistinguishable from one
+   * already on screen, especially for colourblind readers.
+   */
+  const shown: Slice[] = slices.slice(0, SERIES.length);
+  const tail = slices.slice(SERIES.length);
+  if (tail.length > 0) {
+    shown.push({
+      id: "__other",
+      label: `Other (${tail.length})`,
+      count: tail.reduce((sum, slice) => sum + slice.count, 0),
+    });
+  }
+
   let cursor = 0;
-  const segments = slices.map((slice, index) => {
+  const segments = shown.map((slice, index) => {
     const share = slice.count / total;
     const sweep = share * 360;
     const start = cursor + GAP / 2;
@@ -87,7 +104,7 @@ export function DonutChart({
     return {
       ...slice,
       share,
-      colour: SERIES[index % SERIES.length],
+      colour: slice.id === "__other" ? OTHER : SERIES[index],
       // A sliver narrower than the gap would render inside out.
       path: end > start ? arc(start, end) : null,
     };
