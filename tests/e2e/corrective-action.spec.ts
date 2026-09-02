@@ -13,7 +13,9 @@ test.describe("corrective action", () => {
     page,
   }) => {
     await page.goto("/ncr");
-    await page.locator('table a[href^="/ncr/"]').first().click();
+    await page
+      .locator('a[href^="/ncr/"]:not([href="/ncr/new"])')
+      .filter({ visible: true }).first().click();
 
     await expect(page.getByRole("heading", { name: "Corrective action" })).toBeVisible();
 
@@ -27,7 +29,9 @@ test.describe("corrective action", () => {
 
   test("closing offers a distinct action once complete is ticked", async ({ page }) => {
     await page.goto("/ncr?status=Open");
-    await page.locator('table a[href^="/ncr/"]').first().click();
+    await page
+      .locator('a[href^="/ncr/"]:not([href="/ncr/new"])')
+      .filter({ visible: true }).first().click();
 
     await page.locator("textarea").fill("Root cause found and corrected.");
     await page.getByRole("checkbox").check();

@@ -15,9 +15,13 @@ const variants: Record<Variant, string> = {
   danger: "bg-danger text-white border border-transparent hover:opacity-90",
 };
 
+/**
+ * Taller on small screens: 44px is the smallest comfortable touch target, and
+ * these are pressed with gloves on a shop floor.
+ */
 const sizes: Record<Size, string> = {
-  sm: "h-8 px-3 text-[13px]",
-  md: "h-10 px-4 text-sm",
+  sm: "h-9 px-3 text-[13px] sm:h-8",
+  md: "h-11 px-4 text-sm sm:h-10",
 };
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {

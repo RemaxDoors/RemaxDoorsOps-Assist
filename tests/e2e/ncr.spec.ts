@@ -31,14 +31,22 @@ test.describe("NCR", () => {
     await page.goto("/ncr");
     await expect(page.getByRole("heading", { name: "Non-conformance reports" })).toBeVisible();
 
-    // Scoped to the table: a bare href^="/ncr/" also matches the Add NCR button.
-    const firstNcr = page.locator('table a[href^="/ncr/"]').first();
-    const label = (await firstNcr.textContent())?.trim();
+    // Both layouts are in the DOM and hidden by CSS, so filter to whichever
+    // is actually visible. The :not() excludes the Add NCR button.
+    const firstNcr = page
+      .locator('a[href^="/ncr/"]:not([href="/ncr/new"])')
+      .filter({ visible: true }).first();
+    // From the href, not the link text: on a mobile card the text is the whole
+    // card, while on desktop it is just the number.
+    const href = await firstNcr.getAttribute("href");
+    const id = href?.split("/").pop();
     await firstNcr.click();
 
     await expect(page.getByText("Non-conformance ID")).toBeVisible();
     await expect(page.getByText("Reported by")).toBeVisible();
-    if (label) await expect(page.getByRole("heading", { name: `NCR ${label}` })).toBeVisible();
+    if (id) {
+      await expect(page.getByRole("heading", { name: `NCR ${id}` })).toBeVisible();
+    }
   });
 
   test("wizard reaches the details step and shows the next NCR id", async ({ page }) => {

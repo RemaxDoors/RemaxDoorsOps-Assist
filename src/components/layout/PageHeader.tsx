@@ -1,5 +1,13 @@
 import type { ReactNode } from "react";
 
+/**
+ * Page title and its actions.
+ *
+ * Actions used to be hidden below `sm`, on the reasoning that the hamburger
+ * duplicated them. That stopped being true once pages gained their own —
+ * "Create Simpro task" and "Back to list" exist nowhere else, so on a phone
+ * they simply vanished. They now wrap onto their own row instead.
+ */
 export function PageHeader({
   title,
   description,
@@ -16,11 +24,12 @@ export function PageHeader({
           {title}
         </h1>
         {description ? (
-          <p className="mt-1 text-sm text-ink-muted">{description}</p>
+          <p className="mt-1 text-sm text-ink-body">{description}</p>
         ) : null}
       </div>
-      {/* Actions are duplicated in the hamburger menu on small screens. */}
-      {actions ? <div className="hidden gap-2 sm:flex">{actions}</div> : null}
+      {actions ? (
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">{actions}</div>
+      ) : null}
     </div>
   );
 }

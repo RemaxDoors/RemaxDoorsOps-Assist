@@ -70,13 +70,19 @@ export function CookieConsent() {
       ref={bannerRef}
       role="dialog"
       aria-label="Cookie notice"
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-line bg-surface px-4 py-4 shadow-[0_-4px_20px_rgba(27,30,33,0.10)]"
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-line bg-surface px-4 py-3 shadow-[0_-4px_20px_rgba(27,30,33,0.10)] sm:py-4"
     >
       <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-[13px] text-ink-muted">
-          We use a strictly necessary cookie to keep you signed in. Optional
-          cookies help us understand how the tool is used — your choice is
-          remembered for a year.
+        {/* Short on a phone, where this banner costs a sixth of the screen. */}
+        <p className="text-[13px] text-ink-body">
+          <span className="sm:hidden">
+            We use a cookie to keep you signed in.
+          </span>
+          <span className="hidden sm:inline">
+            We use a strictly necessary cookie to keep you signed in. Optional
+            cookies help us understand how the tool is used — your choice is
+            remembered for a year.
+          </span>
         </p>
         <div className="flex shrink-0 gap-2">
           <Button variant="secondary" size="sm" onClick={() => choose("essential")}>

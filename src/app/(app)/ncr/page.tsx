@@ -101,6 +101,48 @@ const columns: Column<Ncr>[] = [
   },
 ];
 
+/**
+ * One NCR as a tappable card. Ordered by what matters on site: which NCR and
+ * whether it is still open, then the part, then the problem.
+ */
+function ncrCard(row: Ncr) {
+  return (
+    <Link
+      href={`/ncr/${row.id}`}
+      className="block px-4 py-3.5 active:bg-canvas"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[15px] font-bold text-ink">{row.id}</span>
+        <Badge tone={row.status === "Open" ? "brand" : "ok"}>{row.status}</Badge>
+      </div>
+
+      <p className="mt-1 text-[13px] font-semibold text-ink">
+        {row.partId ?? (row.jobId ? `Job ${row.jobId}` : "No part")}
+      </p>
+      {row.partDescription ? (
+        <p className="text-[12px] text-ink-muted">{row.partDescription}</p>
+      ) : null}
+
+      <p className="mt-1.5 line-clamp-2 text-[13px] text-ink-body">
+        {row.description || "No description recorded."}
+      </p>
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-ink-muted">
+        {row.category ? <Badge tone="graphite">{row.category.description}</Badge> : null}
+        <span>{formatDate(row.createdAt)}</span>
+        <span aria-hidden>·</span>
+        <span>
+          {row.status === "Open"
+            ? `${daysSince(row.createdAt)}d open`
+            : `closed ${formatDate(row.correctiveActionDate)}`}
+        </span>
+        <span aria-hidden>·</span>
+        <span>{row.reportedBy ?? "-"}</span>
+      </div>
+    </Link>
+  );
+}
+
 export default async function NcrPage({
   searchParams,
 }: {
@@ -153,6 +195,7 @@ export default async function NcrPage({
           columns={columns}
           rows={rows}
           rowKey={(row) => row.id}
+          card={ncrCard}
           empty="No NCRs match these filters."
         />
       </Card>

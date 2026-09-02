@@ -80,7 +80,13 @@ bearing block issue last month" is unfindable.
 
 ## 2. Mobile — the primary device for one of the three groups
 
-### 2.1 The NCR list is a six-column table on a phone
+### 2.1 The NCR list is a six-column table on a phone — DONE
+
+*Implemented: `DataTable` takes a `card` renderer used below `sm`. The NCR
+list shows number, status, part, description, category, age and reporter
+stacked, with no horizontal scroll. The table is unchanged from `sm` up.*
+
+Original finding:
 
 At 375px, only NCR / Part / Issue are visible; status, cause and reporter are
 off-screen behind a horizontal scroll, and the date wraps to three lines.
@@ -90,7 +96,12 @@ and status on the first line, part and description beneath, tap to open. Keep
 the table for tablet and desktop. `DataTable` already centralises this, so it
 is one component with a responsive branch rather than a rewrite of each page.
 
-### 2.2 Page actions disappear on mobile
+### 2.2 Page actions disappear on mobile — DONE
+
+*Implemented: `PageHeader` wraps actions onto their own full-width row instead
+of hiding them. Buttons are 44px tall below `sm`.*
+
+Original finding:
 
 `PageHeader` renders actions as `hidden gap-2 sm:flex`. Below 640px they are
 gone. On a phone that means **no "Create Simpro task", no "Back to list"** on
@@ -103,7 +114,11 @@ gained their own actions.
 **Needed:** a sticky action bar at the bottom of the viewport on small screens,
 or feed page actions into the hamburger.
 
-### 2.3 The cookie banner costs a quarter of a phone screen
+### 2.3 The cookie banner costs a quarter of a phone screen — DONE
+
+*Implemented: one short line on phones, the full wording from `sm` up.*
+
+Original finding:
 
 It occupies ~136px of an 812px screen until dismissed, on every page. It is
 correct that it no longer covers content, but on a phone it should be a compact
@@ -193,7 +208,7 @@ Grouped by what unblocks the most people per unit of work.
 | # | Item | Why first |
 | --- | --- | --- |
 | ~~1~~ | ~~Corrective action + close (1.1)~~ | **Done** |
-| 2 | Mobile list cards (2.1) + actions (2.2) | The tech's primary device is unusable for browsing |
+| ~~2~~ | ~~Mobile list cards (2.1) + actions (2.2)~~ | **Done** |
 | 3 | Entra → M1 employee mapping | Prerequisite for "my NCRs" and for recording who closed one |
 | 4 | Attachment viewing (1.2) | Photos are the point of the attachment feature |
 | 5 | Roles (4.1) | Cheap once identity mapping exists |
