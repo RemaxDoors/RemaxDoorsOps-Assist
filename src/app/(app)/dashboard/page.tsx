@@ -1,18 +1,27 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card, CardHeader } from "@/components/ui/Card";
+import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { RefreshButton } from "@/components/ui/RefreshButton";
 import { StatCard } from "@/components/ui/StatCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DbError } from "@/components/ui/DbError";
+import { DonutChart } from "@/components/charts/DonutChart";
+import { BarChart } from "@/components/charts/BarChart";
 import {
+  countByCategory,
+  countByReporter,
   countByStatus,
   countUnassigned,
   listNcrs,
+  monthlyActivity,
+  type CategoryCount,
+  type MonthlyActivity,
   type NcrCounts,
+  type ReporterCount,
 } from "@/lib/repositories/ncr.repo";
+import { employeeNameMap } from "@/lib/repositories/employee.repo";
 import { formatDate, daysSince } from "@/lib/format";
 import type { Ncr } from "@/types/ncr";
 
@@ -24,16 +33,39 @@ export default async function DashboardPage() {
   let counts: NcrCounts;
   let unassigned = 0;
   let recent: Ncr[] = [];
+  let categories: CategoryCount[] = [];
+  let reporters: ReporterCount[] = [];
+  let month: MonthlyActivity;
+  let staff: Map<string, string>;
 
   try {
-    [counts, unassigned, recent] = await Promise.all([
-      countByStatus(),
-      countUnassigned(),
-      listNcrs({ limit: 6 }),
-    ]);
+    [counts, unassigned, recent, categories, reporters, month, staff] =
+      await Promise.all([
+        countByStatus(),
+        countUnassigned(),
+        listNcrs({ limit: 6 }),
+        countByCategory(),
+        countByReporter(),
+        monthlyActivity(),
+        employeeNameMap(),
+      ]);
   } catch (error) {
     return <DbError error={error} />;
   }
+
+  // Top raisers only: the tail is a long list of people with one or two each.
+  const topReporters = reporters.slice(0, 8).map((row) => ({
+    id: row.id,
+    label: staff.get(row.id) ?? row.id,
+    count: row.count,
+  }));
+
+  const delta = (now: number, before: number) => {
+    if (before === 0) return now === 0 ? "Same as last month" : "None last month";
+    const change = Math.round(((now - before) / before) * 100);
+    if (change === 0) return "Level with last month";
+    return `${change > 0 ? "+" : ""}${change}% on last month (${before})`;
+  };
 
   return (
     <>
@@ -69,18 +101,44 @@ export default async function DashboardPage() {
           accent="red"
         />
         <StatCard
-          label="Closed"
-          value={counts.Closed}
-          hint="Corrective action complete"
-          href="/ncr?status=Closed"
+          label="Raised this month"
+          value={month.raisedThisMonth}
+          hint={delta(month.raisedThisMonth, month.raisedLastMonth)}
+          href="/ncr"
         />
         <StatCard
-          label="All records"
-          value={counts.total}
-          hint="Every record"
-          href="/ncr"
+          label="Solved this month"
+          value={month.solvedThisMonth}
+          hint={delta(month.solvedThisMonth, month.solvedLastMonth)}
+          href="/ncr?status=Closed"
           accent="light"
         />
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="By category"
+            subtitle={`${counts.total} records, all time`}
+          />
+          <CardBody>
+            <DonutChart
+              slices={categories}
+              total={counts.total}
+              centreLabel="records"
+            />
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Who raises them"
+            subtitle="Busiest eight, all time"
+          />
+          <CardBody>
+            <BarChart bars={topReporters} />
+          </CardBody>
+        </Card>
       </div>
 
       <Card className="mt-6">

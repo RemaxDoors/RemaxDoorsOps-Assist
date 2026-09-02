@@ -49,3 +49,30 @@ export async function listEmployees(): Promise<Employee[]> {
         !NAMED_INACTIVE.test(employee.name),
     );
 }
+
+/**
+ * Every employee id mapped to a name, leavers included.
+ *
+ * listEmployees() deliberately hides terminated staff so nobody can be assigned
+ * new work, but old NCRs still carry their ids — without them the charts would
+ * show bare codes like "DJZ".
+ */
+export async function employeeNameMap(): Promise<Map<string, string>> {
+  const rows = await readRows<Record<string, unknown>>("employee", {
+    columns: ["lmeEmployeeID", "lmeEmployeeName"],
+  });
+
+  return new Map(
+    rows
+      .map(
+        (row) =>
+          [
+            String(row.lmeEmployeeID ?? "").trim(),
+            String(row.lmeEmployeeName ?? "")
+              .trim()
+              .replace(/\s*-\s*INACTIVE\s*$/i, ""),
+          ] as const,
+      )
+      .filter(([id, name]) => id.length > 0 && name.length > 0),
+  );
+}

@@ -283,6 +283,35 @@ export async function insertRowWithAllocatedId(
 }
 
 /**
+ * COUNT(*) grouped by one registered column, ordered by count descending.
+ * Aggregating in SQL rather than pulling every row back to count in memory.
+ */
+export async function countGrouped(
+  table: TableKey,
+  column: string,
+  where: readonly Condition[] = [],
+): Promise<Array<{ value: string; count: number }>> {
+  const def = tables[table];
+  assertColumns(table, def.readable, [column]);
+
+  const pool = await getPool();
+  const request = pool.request();
+  const clause = buildWhere(table, where, request);
+
+  const result = await request.query(
+    `SELECT [${column}] AS value, COUNT(*) AS total
+     FROM ${qualified(def)} ${clause}
+     GROUP BY [${column}]
+     ORDER BY COUNT(*) DESC`,
+  );
+
+  return result.recordset.map((row) => ({
+    value: String(row.value ?? "").trim(),
+    count: Number(row.total ?? 0),
+  }));
+}
+
+/**
  * Whether a column is actually present, cached per process.
  *
  * Lets the app use user-defined M1 columns that a DBA may not have added yet,

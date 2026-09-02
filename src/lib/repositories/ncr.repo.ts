@@ -1,6 +1,7 @@
 import "server-only";
 import {
   columnExists,
+  countGrouped,
   countRows,
   insertRowWithAllocatedId,
   readRows,
@@ -249,4 +250,75 @@ export async function setNcrSimproReference(
   return affected > 0
     ? { stored: true, message: null }
     : { stored: false, message: `NCR ${ncrId} was not found when storing the task id.` };
+}
+
+/** One slice of the category breakdown. */
+export type CategoryCount = { id: string; label: string; count: number };
+
+export async function countByCategory(): Promise<CategoryCount[]> {
+  const [grouped, maps] = await Promise.all([
+    countGrouped("ncr", "qarNonConformanceCategoryID"),
+    lookups(),
+  ]);
+
+  return grouped.map((row) => ({
+    id: row.value,
+    label:
+      maps.categories.get(row.value)?.description ||
+      (row.value ? row.value : "Uncategorised"),
+    count: row.count,
+  }));
+}
+
+export type ReporterCount = { id: string; count: number };
+
+/** Who raises non-conformances, busiest first. */
+export async function countByReporter(): Promise<ReporterCount[]> {
+  const grouped = await countGrouped("ncr", "qarReportedByEmployeeID");
+  return grouped
+    .filter((row) => row.value.length > 0)
+    .map((row) => ({ id: row.value, count: row.count }));
+}
+
+export type MonthlyActivity = {
+  raisedThisMonth: number;
+  solvedThisMonth: number;
+  raisedLastMonth: number;
+  solvedLastMonth: number;
+};
+
+/**
+ * This month against last, so the headline numbers have something to mean.
+ * "Solved" is a corrective action completed within the month, which is not the
+ * same as an NCR raised that month.
+ */
+export async function monthlyActivity(): Promise<MonthlyActivity> {
+  const now = new Date();
+  const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+  const raisedBetween = (from: Date, to?: Date) =>
+    countRows("ncr", [
+      { column: "qarCreatedDate", op: "gte", value: from },
+      ...(to ? [{ column: "qarCreatedDate", op: "lt" as const, value: to }] : []),
+    ]);
+
+  const solvedBetween = (from: Date, to?: Date) =>
+    countRows("ncr", [
+      { column: "qarCorrectiveActionComplete", op: "eq", value: true },
+      { column: "qarCorrectiveActionDate", op: "gte", value: from },
+      ...(to
+        ? [{ column: "qarCorrectiveActionDate", op: "lt" as const, value: to }]
+        : []),
+    ]);
+
+  const [raisedThisMonth, solvedThisMonth, raisedLastMonth, solvedLastMonth] =
+    await Promise.all([
+      raisedBetween(startOfThisMonth),
+      solvedBetween(startOfThisMonth),
+      raisedBetween(startOfLastMonth, startOfThisMonth),
+      solvedBetween(startOfLastMonth, startOfThisMonth),
+    ]);
+
+  return { raisedThisMonth, solvedThisMonth, raisedLastMonth, solvedLastMonth };
 }
