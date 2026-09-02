@@ -9,3 +9,8 @@ uploads/
 
 # Generated Azure readiness assessment
 .copilot-azure/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/

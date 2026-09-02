@@ -1,0 +1,9 @@
+# Shell scripts must keep LF endings: a CRLF start.sh fails on Linux hosts with
+# "bad interpreter: /usr/bin/env bash^M", which is a confusing way to find out.
+*.sh text eol=lf
+
+# Windows-only scripts keep CRLF.
+*.ps1 text eol=crlf
+
+# Everything else: normalise in the repository, check out per platform.
+* text=auto
