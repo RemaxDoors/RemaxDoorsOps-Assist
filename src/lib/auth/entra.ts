@@ -46,6 +46,48 @@ export function redirectUri() {
   return new URL("/api/auth/callback", entraConfig().baseUrl).toString();
 }
 
+/**
+ * Builds an absolute URL for a redirect back into the app.
+ *
+ * Route handlers cannot use `request.url` for this behind App Service. The
+ * platform proxies to the container's own listener, so `request.url` reads
+ * `http://localhost:8080/...` and every redirect resolved against it sends
+ * the browser to a port only the container can see. (Middleware is unaffected
+ * — NextRequest is built from the forwarded host.)
+ *
+ * APP_BASE_URL is the app's public origin and is already required for the
+ * Entra redirect_uri to match, so it is the right source of truth here too.
+ */
+export function appUrl(path: string, request: Request) {
+  return new URL(path, process.env.APP_BASE_URL ?? request.url);
+}
+
+/**
+ * Confines a post-sign-in destination to this app.
+ *
+ * `returnTo` starts life as a query parameter, so without this an absolute
+ * URL would be honoured — `/api/auth/login?returnTo=https://example.com`
+ * would hand a signed-in user straight to someone else's site, with the
+ * credibility of having just passed a Microsoft login. Only a single-slash
+ * path is accepted; anything else falls back to the dashboard.
+ */
+export function safeReturnTo(value: string | null | undefined) {
+  if (!value) return "/dashboard";
+
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(value);
+  } catch {
+    return "/dashboard";
+  }
+
+  // "//evil.com" is protocol-relative and resolves off-origin; "/\evil.com"
+  // is treated the same way by some browsers.
+  if (!decoded.startsWith("/")) return "/dashboard";
+  if (decoded.startsWith("//") || decoded.startsWith("/\\")) return "/dashboard";
+  return decoded;
+}
+
 export function authorizeUrl({
   state,
   codeChallenge,

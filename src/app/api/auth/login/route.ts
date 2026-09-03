@@ -1,12 +1,14 @@
 import { randomBytes, createHash } from "node:crypto";
 import { NextResponse } from "next/server";
-import { authorizeUrl } from "@/lib/auth/entra";
+import { appUrl, authorizeUrl, safeReturnTo } from "@/lib/auth/entra";
 
 export const dynamic = "force-dynamic";
 
 /** Starts the Microsoft sign-in redirect, stashing state + PKCE verifier. */
 export async function GET(request: Request) {
-  const returnTo = new URL(request.url).searchParams.get("returnTo") ?? "/dashboard";
+  const returnTo = safeReturnTo(
+    new URL(request.url).searchParams.get("returnTo"),
+  );
   const state = randomBytes(16).toString("base64url");
   const verifier = randomBytes(32).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
@@ -29,7 +31,7 @@ export async function GET(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Sign-in failed";
     return NextResponse.redirect(
-      new URL(`/?error=${encodeURIComponent(message)}`, request.url),
+      appUrl(`/?error=${encodeURIComponent(message)}`, request),
     );
   }
 }

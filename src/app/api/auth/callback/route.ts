@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { exchangeCode } from "@/lib/auth/entra";
+import { appUrl, exchangeCode, safeReturnTo } from "@/lib/auth/entra";
 import {
   SESSION_COOKIE,
   encodeSession,
@@ -12,7 +12,9 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const failure = (message: string) =>
-    NextResponse.redirect(new URL(`/?error=${encodeURIComponent(message)}`, url));
+    NextResponse.redirect(
+      appUrl(`/?error=${encodeURIComponent(message)}`, request),
+    );
 
   const error = url.searchParams.get("error_description") ?? url.searchParams.get("error");
   if (error) return failure(error);
@@ -36,7 +38,7 @@ export async function GET(request: Request) {
   try {
     const claims = await exchangeCode({ code, codeVerifier: verifier });
     const response = NextResponse.redirect(
-      new URL(decodeURIComponent(returnTo ?? "/dashboard"), url),
+      appUrl(safeReturnTo(returnTo), request),
     );
 
     response.cookies.set(
