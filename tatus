@@ -1,0 +1,53 @@
+[35m.env.example[m[36m:[m[32m9[m[36m:[mDB_[1;31mPASSWORD[m=
+[35m.env.example[m[36m:[m[32m19[m[36m:[mAZURE_AD_[1;31mCLIENT_SECRET[m=
+[35m.env.example[m[36m:[m[32m21[m[36m:[m[1;31mAUTH_SECRET[m=
+[35m.env.example[m[36m:[m[32m28[m[36m:[mSIMPRO_[1;31mAPI_TOKEN[m=
+[35m.env.example[m[36m:[m[32m32[m[36m:[m[1;31mAPI_KEY[m=
+[35mDEPLOYMENT.md[m[36m:[m[32m19[m[36m:[mCREATE LOGIN ops_assist_app WITH [1;31mPASSWORD[m = '<strong [1;31mpassword[m>';
+[35mDEPLOYMENT.md[m[36m:[m[32m35[m[36m:[mThen set `DB_USER` / `DB_[1;31mPASSWORD[m` and restart. Verify with `/api/health`.
+[35mDEPLOYMENT.md[m[36m:[m[32m58[m[36m:[m4. Fill `AZURE_AD_TENANT_ID`, `AZURE_AD_CLIENT_ID`, `AZURE_AD_[1;31mCLIENT_SECRET[m`.
+[35mDEPLOYMENT.md[m[36m:[m[32m80[m[36m:[mSIMPRO_[1;31mAPI_TOKEN[m=<production token>
+[35mDEPLOYMENT.md[m[36m:[m[32m118[m[36m:[m`[1;31mAPI_KEY[m` and `[1;31mAUTH_SECRET[m` were generated during development and have sat in a
+[35mDEPLOYMENT.md[m[36m:[m[32m197[m[36m:[mOne shared `[1;31mAPI_KEY[m` grants full API access including writes. If more than one
+[35mDEPLOYMENT.md[m[36m:[m[32m305[m[36m:[m- [ ] `[1;31mAPI_KEY[m` and `[1;31mAUTH_SECRET[m` rotated for production
+[35mREADME.md[m[36m:[m[32m94[m[36m:[m- `X-API-Key: <[1;31mAPI_KEY[m>` (or `Authorization: Bearer <[1;31mAPI_KEY[m>`) for scripts,
+[35mREADME.md[m[36m:[m[32m106[m[36m:[mDB_SERVER, DB_NAME, DB_USER, DB_[1;31mPASSWORD[m   # required
+[35mREADME.md[m[36m:[m[32m108[m[36m:[mAZURE_AD_TENANT_ID, AZURE_AD_CLIENT_ID, AZURE_AD_[1;31mCLIENT_SECRET[m
+[35mREADME.md[m[36m:[m[32m109[m[36m:[m[1;31mAUTH_SECRET[m            # random 32+ chars, signs the session cookie
+[35mREADME.md[m[36m:[m[32m111[m[36m:[m[1;31mAPI_KEY[m                # long random string for programmatic callers
+[35mREADME.md[m[36m:[m[32m113[m[36m:[mSIMPRO_BASE_URL, SIMPRO_[1;31mAPI_TOKEN[m          # optional
+[35mREADME.md[m[36m:[m[32m121[m[36m:[m[1;31mpassword[m. Register an app in Entra ID, add redirect URI
+[35mREVIEW.md[m[36m:[m[32m194[m[36m:[mA single `[1;31mAPI_KEY[m` grants full API access including writes, and there is no
+[35mTODO.md[m[36m:[m[32m40[m[36m:[m`DB_USER` / `DB_[1;31mPASSWORD[m`.
+[35mTODO.md[m[36m:[m[32m69[m[36m:[m`AZURE_AD_TENANT_ID`, `AZURE_AD_CLIENT_ID` and `AZURE_AD_[1;31mCLIENT_SECRET[m` are
+[35msrc/app/(app)/api-docs/EndpointCard.tsx[m[36m:[m[32m25[m[36m:[m          `  -H "X-API-Key: $[1;31mAPI_KEY[m" \\`,
+[35msrc/app/(app)/api-docs/EndpointCard.tsx[m[36m:[m[32m31[m[36m:[m      : `curl -H "X-API-Key: $[1;31mAPI_KEY[m" ${baseUrl}${endpoint.sample}`;
+[35msrc/app/(app)/api-docs/page.tsx[m[36m:[m[32m44[m[36m:[m              <code className="text-ink">[1;31mAPI_KEY[m</code> value in{" "}
+[35msrc/app/(app)/api-docs/page.tsx[m[36m:[m[32m46[m[36m:[m              [1;31mpassword[m and keep it out of anything shared.
+[35msrc/app/api/health/route.ts[m[36m:[m[32m71[m[36m:[m    return "M1 rejected the login. Check DB_USER and DB_[1;31mPASSWORD[m.";
+[35msrc/app/api/health/route.ts[m[36m:[m[32m80[m[36m:[m    return "Simpro rejected the API token. Check SIMPRO_[1;31mAPI_TOKEN[m.";
+[35msrc/app/api/simpro/job/[id]/parts/route.ts[m[36m:[m[32m15[m[36m:[m      { error: "Simpro is not connected — set SIMPRO_BASE_URL and SIMPRO_[1;31mAPI_TOKEN[m" },
+[35msrc/app/api/simpro/job/[id]/route.ts[m[36m:[m[32m17[m[36m:[m          "Simpro is not connected yet — add SIMPRO_BASE_URL and SIMPRO_[1;31mAPI_TOKEN[m to .env.local",
+[35msrc/app/page.tsx[m[36m:[m[32m76[m[36m:[m                <code className="text-ink">AZURE_AD_[1;31mCLIENT_SECRET[m</code> and{" "}
+[35msrc/app/page.tsx[m[36m:[m[32m77[m[36m:[m                <code className="text-ink">[1;31mAUTH_SECRET[m</code> to{" "}
+[35msrc/components/ui/DbError.tsx[m[36m:[m[32m21[m[36m:[m          <code className="text-ink">DB_[1;31mPASSWORD[m</code> in{" "}
+[35msrc/lib/auth/entra.ts[m[36m:[m[32m5[m[36m:[m * Sign-in is browser-redirect only: the app never sees a user's [1;31mpassword[m.
+[35msrc/lib/auth/entra.ts[m[36m:[m[32m14[m[36m:[m    clientSecret: process.env.AZURE_AD_[1;31mCLIENT_SECRET[m,
+[35msrc/lib/auth/entra.ts[m[36m:[m[32m21[m[36m:[m  return Boolean(tenantId && clientId && clientSecret && process.env.[1;31mAUTH_SECRET[m);
+[35msrc/lib/auth/entra.ts[m[36m:[m[32m36[m[36m:[m  if (!clientSecret) missing.push("AZURE_AD_[1;31mCLIENT_SECRET[m");
+[35msrc/lib/auth/entra.ts[m[36m:[m[32m95[m[36m:[m        [1;31mclient_secret[m: clientSecret,
+[35msrc/lib/auth/session.ts[m[36m:[m[32m21[m[36m:[m  const value = process.env.[1;31mAUTH_SECRET[m;
+[35msrc/lib/auth/session.ts[m[36m:[m[32m23[m[36m:[m    throw new Error("[1;31mAUTH_SECRET[m must be set to a random string of 32+ chars");
+[35msrc/lib/db/client.ts[m[36m:[m[32m14[m[36m:[mconst REQUIRED = ["DB_SERVER", "DB_NAME", "DB_USER", "DB_[1;31mPASSWORD[m"] as const;
+[35msrc/lib/db/client.ts[m[36m:[m[32m37[m[36m:[m    [1;31mpassword[m: process.env.DB_[1;31mPASSWORD[m!,
+[35msrc/lib/simpro/client.ts[m[36m:[m[32m18[m[36m:[m  return Boolean(process.env.SIMPRO_BASE_URL && process.env.SIMPRO_[1;31mAPI_TOKEN[m);
+[35msrc/lib/simpro/client.ts[m[36m:[m[32m23[m[36m:[m  const token = process.env.SIMPRO_[1;31mAPI_TOKEN[m;
+[35msrc/lib/simpro/client.ts[m[36m:[m[32m26[m[36m:[m      "Simpro is not configured — set SIMPRO_BASE_URL and SIMPRO_[1;31mAPI_TOKEN[m in .env.local",
+[35msrc/middleware.ts[m[36m:[m[32m19[m[36m:[m  const expected = process.env.[1;31mAPI_KEY[m;
+[35mtests/e2e/auth.spec.ts[m[36m:[m[32m45[m[36m:[m      const key = process.env.[1;31mAPI_KEY[m;
+[35mtests/e2e/auth.spec.ts[m[36m:[m[32m46[m[36m:[m      test.skip(!key, "[1;31mAPI_KEY[m not set in this environment");
+[35mtests/e2e/auth.spec.ts[m[36m:[m[32m56[m[36m:[m      const key = process.env.[1;31mAPI_KEY[m;
+[35mtests/e2e/auth.spec.ts[m[36m:[m[32m57[m[36m:[m      test.skip(!key, "[1;31mAPI_KEY[m not set in this environment");
+[35mtests/e2e/corrective-action.spec.ts[m[36m:[m[32m46[m[36m:[m  const key = process.env.[1;31mAPI_KEY[m;
+[35mtests/e2e/ncr.spec.ts[m[36m:[m[32m78[m[36m:[m  const key = process.env.[1;31mAPI_KEY[m;
+[35mtests/load/ncr-api.jmx[m[36m:[m[32m8[m[36m:[m           -Japikey=YOUR_[1;31mAPI_KEY[m -Jusers=10 -Jrampup=10 -Jloops=20
