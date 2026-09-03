@@ -27,7 +27,7 @@ jobs:
         run: npm ci
 
       - name: Typecheck
-        run: npm run typecheck --if-present
+        run: npm run --if-present typecheck
 
       - name: Build application
         run: npm run build
@@ -55,4 +55,9 @@ jobs:
         with:
           name: node-app
 
-      - name: Deploy
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: "RemaxDoorsOps-Assist"
+          package: .
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_503B0979632F48E3996482F9E5749224 }}
