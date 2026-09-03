@@ -26,24 +26,38 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Must precede the typecheck: `next build` writes next-env.d.ts, which
+      # supplies the ambient declarations for static asset imports (the logo).
+      # Running tsc first fails on a file Next has not generated yet.
+      - name: Build application
+        run: npm run build
+
       - name: Typecheck
         run: npm run --if-present typecheck
 
-      - name: Build application
-        run: npm run build
+      # Build-time only from here on: TypeScript, Tailwind and Playwright are
+      # ~200MB that App Service would otherwise unpack on every deploy.
+      - name: Drop development dependencies
+        run: npm prune --omit=dev
+
+      # App Service runs `npm start` against a prebuilt tree, so node_modules
+      # and .next ship with it. Zipping first keeps the artifact one file
+      # instead of ~40,000, which is the difference between a deploy that
+      # takes a minute and one that takes twenty. `.next/cache` is 75MB of
+      # incremental build state the server never reads.
+      - name: Package for deployment
+        run: |
+          zip -r -q --symlinks release.zip . \
+            -x '.git/*' '.next/cache/*' 'tests/*' 'test-results/*' \
+               'playwright-report/*' 'blob-report/*' 'release.zip'
+          ls -lh release.zip
 
       - name: Upload deployment artifact
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: |
-            .
-            !.git/
-            !tests/
-            !test-results/
-            !playwright-report/
-            !blob-report/
-          include-hidden-files: true
+          path: release.zip
+          retention-days: 7
 
   deploy:
     runs-on: ubuntu-latest
@@ -59,5 +73,5 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: "RemaxDoorsOps-Assist"
-          package: .
+          package: release.zip
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_503B0979632F48E3996482F9E5749224 }}
