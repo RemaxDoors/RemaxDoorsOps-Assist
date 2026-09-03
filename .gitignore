@@ -14,7 +14,7 @@ next-env.d.ts
 
 # Application-generated files
 uploads/
-queue/
+/queue/
 
 # Generated Azure readiness assessment
 .copilot-azure/
