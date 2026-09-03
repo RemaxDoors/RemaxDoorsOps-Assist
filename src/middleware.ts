@@ -13,7 +13,18 @@ import { SESSION_COOKIE } from "@/lib/auth/constants";
  */
 
 /** Open endpoints: sign-in itself, and the health probe used by monitoring. */
-const PUBLIC_PATHS = ["/api/auth/", "/api/health/"];
+const PUBLIC_PREFIXES = ["/api/auth", "/api/health"];
+
+/**
+ * Matches the prefix itself as well as anything beneath it. `/api/health` is
+ * the probe App Service is pointed at, and a trailing-slash-only prefix would
+ * have answered it with a 401 — an instance permanently marked unhealthy.
+ */
+function isPublic(pathname: string) {
+  return PUBLIC_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
 
 function hasValidApiKey(request: NextRequest) {
   const expected = process.env.API_KEY;
@@ -36,9 +47,7 @@ function hasValidApiKey(request: NextRequest) {
 export function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
-  if (PUBLIC_PATHS.some((prefix) => pathname.startsWith(prefix))) {
-    return NextResponse.next();
-  }
+  if (isPublic(pathname)) return NextResponse.next();
 
   const isApi = pathname.startsWith("/api/");
 
