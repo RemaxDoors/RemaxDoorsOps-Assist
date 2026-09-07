@@ -221,15 +221,9 @@ export async function createSimproTask(
 ): Promise<{ taskId: string; url: string; jobNoteId: string | null; jobNoteError: string | null }> {
   const { baseUrl, companyId } = requireConfig();
 
-  const description = input.jobId
-    ? `${input.description}
-
-Simpro job: ${input.jobId}`
-    : input.description;
-
   const body: Record<string, unknown> = {
     Subject: input.subject.slice(0, 255),
-    Description: description,
+    Description: input.description,
     AssignedTo: input.assignedToId,
     Status: input.status,
     Priority: input.priority,
@@ -238,17 +232,22 @@ Simpro job: ${input.jobId}`
   if (input.dueDate) body.DueDate = input.dueDate;
 
   /**
-   * Customer and site fill in the same fields a person would see on Simpro's
-   * Create Task screen.
+   * Customer, site and job fill in the same fields a person would see on
+   * Simpro's Create Task screen.
    *
-   * The job deliberately is not sent: Simpro rejects Associated/Job on both
-   * POST and PATCH ("This API Column does not allow POST requests"), so
-   * Project No. cannot be set through the API. The job number goes into the
-   * description instead, so the link is at least visible and searchable.
+   * Job must be an object — `{ Job: 605929 }` is refused with "This API
+   * Column does not allow POST requests", which reads like the field is
+   * closed to the API when it is really the shape that is wrong. Customer
+   * and Site accept a bare id, so the inconsistency is easy to walk into.
    */
   const associated: Record<string, unknown> = {};
   if (input.customerId) associated.Customer = input.customerId;
   if (input.siteId) associated.Site = input.siteId;
+
+  const jobNumber = Number(input.jobId);
+  if (input.jobId && Number.isInteger(jobNumber) && jobNumber > 0) {
+    associated.Job = { ID: jobNumber };
+  }
   if (Object.keys(associated).length > 0) body.Associated = associated;
 
   const created = await simpro<{ ID?: number | string }>(
@@ -259,27 +258,12 @@ Simpro job: ${input.jobId}`
   const taskId = String(created.ID ?? "");
 
   /**
-   * Simpro will not let the API attach a task to a job — Associated/Job is
-   * rejected on POST and PATCH, and jobs/{id}/tasks/ is search-only. A job
-   * note is the one thing that does link back, so the job shows the NCR.
+   * The job note was a stand-in for a link the API was thought to refuse.
+   * Now that Associated.Job is set on the task itself, the task appears
+   * under the job's Tasks tab and the note would only be duplication.
    */
-  let jobNoteId: string | null = null;
-  let jobNoteError: string | null = null;
-  if (input.jobId) {
-    try {
-      const note = await addSimproJobNote({
-        jobId: input.jobId,
-        subject: input.subject,
-        note: `${input.description}
-
-Simpro task ${taskId}.`,
-      });
-      jobNoteId = note.noteId;
-    } catch (error) {
-      jobNoteError =
-        error instanceof Error ? error.message : "Job note could not be added";
-    }
-  }
+  const jobNoteId: string | null = null;
+  const jobNoteError: string | null = null;
 
   return {
     taskId,
