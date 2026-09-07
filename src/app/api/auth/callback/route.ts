@@ -11,10 +11,15 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const failure = (message: string) =>
-    NextResponse.redirect(
+  const failure = (message: string) => {
+    // Also to the server log: the URL version is easy to miss, and this is
+    // the only record of why a sign-in did not complete. Shows up in App
+    // Service Log stream.
+    console.error("[auth] sign-in failed:", message);
+    return NextResponse.redirect(
       appUrl(`/?error=${encodeURIComponent(message)}`, request),
     );
+  };
 
   const error = url.searchParams.get("error_description") ?? url.searchParams.get("error");
   if (error) return failure(error);
@@ -37,6 +42,7 @@ export async function GET(request: Request) {
 
   try {
     const claims = await exchangeCode({ code, codeVerifier: verifier });
+    console.log("[auth] token exchange ok for", claims.preferred_username ?? claims.sub);
     const response = NextResponse.redirect(
       appUrl(safeReturnTo(returnTo), request),
     );
