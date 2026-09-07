@@ -14,6 +14,12 @@ export const navItems: NavItem[] = [
     description: "Operations overview",
   },
   {
+    label: "System",
+    href: "/system",
+    icon: "M12 3a9 9 0 1 0 9 9m-9-5v5l3.5 2M20 4v5h-5",
+    description: "Environment checks and logs",
+  },
+  {
     label: "NCR",
     href: "/ncr",
     icon: "M12 9v4m0 4h.01M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z",

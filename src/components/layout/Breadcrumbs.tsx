@@ -7,6 +7,7 @@ const LABELS: Record<string, string> = {
   dashboard: "Dashboard",
   ncr: "NCR",
   "api-docs": "API",
+  system: "System check",
   new: "Raise NCR",
 };
 
