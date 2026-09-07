@@ -18,6 +18,21 @@ export function isSimproConfigured() {
   return Boolean(process.env.SIMPRO_BASE_URL && process.env.SIMPRO_API_TOKEN);
 }
 
+/**
+ * The Simpro host, with any path discarded.
+ *
+ * SIMPRO_BASE_URL is meant to be the bare host, because this module builds
+ * `/api/v1.0/companies/{id}/...` itself and reads the company from
+ * SIMPRO_COMPANY_ID. People reasonably paste the full API root instead —
+ * ".../api/v1.0/companies/4" — and every request path here starts with "/",
+ * so that extra path was silently ignored rather than breaking anything.
+ * Reducing to the origin makes both forms behave the same on purpose, and
+ * keeps the company id in one place instead of two that can disagree.
+ */
+function origin(baseUrl: string) {
+  return new URL(baseUrl).origin;
+}
+
 function requireConfig() {
   const baseUrl = process.env.SIMPRO_BASE_URL;
   const token = process.env.SIMPRO_API_TOKEN;
@@ -26,8 +41,18 @@ function requireConfig() {
       "Simpro is not configured — set SIMPRO_BASE_URL and SIMPRO_API_TOKEN in .env.local",
     );
   }
+
+  let host: string;
+  try {
+    host = origin(baseUrl);
+  } catch {
+    throw new Error(
+      `SIMPRO_BASE_URL is not a valid URL: ${baseUrl}. Use the host, e.g. https://qa-remaxdoors.simprosuite.com`,
+    );
+  }
+
   return {
-    baseUrl,
+    baseUrl: host,
     token,
     companyId: process.env.SIMPRO_COMPANY_ID ?? "0",
   };
