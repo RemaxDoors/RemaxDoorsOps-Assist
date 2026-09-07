@@ -1,8 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Logo } from "@/components/layout/Logo";
-import { isAuthConfigured } from "@/lib/auth/entra";
-import { getSession } from "@/lib/auth/session";
+import { getSession, signInUrl } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +14,9 @@ export default async function LandingPage({
   const { returnTo = "/dashboard", error } = await searchParams;
   if (await getSession()) redirect(returnTo);
 
-  const configured = isAuthConfigured();
-  const signInHref = `/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
+  // App Service owns sign-in, so there is nothing here that can be
+  // misconfigured — the button always points at its endpoint.
+  const signInHref = signInUrl(returnTo);
 
   return (
     <main className="grid min-h-screen lg:grid-cols-2">
@@ -58,28 +57,12 @@ export default async function LandingPage({
             </p>
           ) : null}
 
-          {configured ? (
-            <Link href={signInHref} className="mt-6 block">
-              <span className="flex h-11 w-full items-center justify-center gap-2.5 rounded-sm bg-ink px-4 text-sm font-bold tracking-wide uppercase text-white transition-colors hover:bg-brand-red">
-                <MicrosoftMark />
-                Sign in with Microsoft
-              </span>
-            </Link>
-          ) : (
-            <div className="mt-6 rounded-lg border border-line bg-canvas px-4 py-3.5">
-              <p className="text-[13px] font-semibold text-ink">
-                Microsoft sign-in is not configured yet
-              </p>
-              <p className="mt-1 text-[13px] text-ink-muted">
-                Add <code className="text-ink">AZURE_AD_TENANT_ID</code>,{" "}
-                <code className="text-ink">AZURE_AD_CLIENT_ID</code>,{" "}
-                <code className="text-ink">AZURE_AD_CLIENT_SECRET</code> and{" "}
-                <code className="text-ink">AUTH_SECRET</code> to{" "}
-                <code className="text-ink">.env.local</code>, then restart the
-                dev server.
-              </p>
-            </div>
-          )}
+          <a href={signInHref} className="mt-6 block">
+            <span className="flex h-11 w-full items-center justify-center gap-2.5 rounded-sm bg-ink px-4 text-sm font-bold tracking-wide uppercase text-white transition-colors hover:bg-brand-red">
+              <MicrosoftMark />
+              Sign in with Microsoft
+            </span>
+          </a>
 
           <p className="mt-8 text-[12px] text-ink-muted">
             Internal tool for remax DOORS staff. Access is logged.

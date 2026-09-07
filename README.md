@@ -95,7 +95,7 @@ Two ways to authenticate:
   M1, Power BI — API routes only, never the UI.
 - A browser session, which is how the "Try it" buttons work.
 
-`/api/health/db` and `/api/auth/*` are open; everything else requires one of
+`/api/health` and `/api/health/db` are open; everything else requires one of
 the two. `src/middleware.ts` enforces this — note it must live in `src/`,
 because this project uses a `src` directory. At the project root it is silently
 ignored.
@@ -105,8 +105,6 @@ ignored.
 ```
 DB_SERVER, DB_NAME, DB_USER, DB_PASSWORD   # required
 DB_PORT, DB_SCHEMA, DB_ENCRYPT, DB_TRUST_SERVER_CERT   # optional
-AZURE_AD_TENANT_ID, AZURE_AD_CLIENT_ID, AZURE_AD_CLIENT_SECRET
-AUTH_SECRET            # random 32+ chars, signs the session cookie
 APP_BASE_URL           # http://localhost:4080 in dev
 API_KEY                # long random string for programmatic callers
 AUTH_DEV_BYPASS        # dev only: skip sign-in; ignored in production builds
@@ -117,13 +115,25 @@ Connection status: http://localhost:4080/api/health/db
 
 ### Microsoft sign-in
 
-Authorization-code flow with PKCE against Entra ID — the app never sees a
-password. Register an app in Entra ID, add redirect URI
-`http://localhost:4080/api/auth/callback` (and the production equivalent), then
-fill the `AZURE_AD_*` values and set `AUTH_DEV_BYPASS=false`.
+Handled by **Azure App Service Authentication**, not by this app. There is no
+OAuth flow, client secret or session cookie in the codebase — App Service signs
+the user in at the platform edge and forwards the result as
+`x-ms-client-principal-*` headers, which `getSession()` reads.
 
-`middleware.ts` bounces requests with no session cookie; `requireSession()`
-verifies the cookie signature server-side.
+Configure it once, in the portal:
+
+> App Service → Settings → Authentication → Add identity provider → Microsoft,
+> then set **Restrict access** to **Allow unauthenticated access**.
+
+That last setting matters. "Require authentication" has the platform reject
+every anonymous request before the app sees it, which also blocks the health
+probe and every API-key caller — neither can complete an interactive sign-in.
+Allowing them through lets `src/middleware.ts` decide: signed-in users and
+valid API keys pass, everyone else is sent to `/.auth/login/aad`.
+
+App Service is not in front of `next dev`, so locally there are no principal
+headers and nobody could sign in. Set `AUTH_DEV_BYPASS=true` in `.env.local`;
+it is ignored in production builds.
 
 ## Brand
 

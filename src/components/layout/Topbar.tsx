@@ -29,7 +29,7 @@ export function Topbar({ session }: { session: Session }) {
           <div className="hidden text-right sm:block">
             <div className="text-[13px] font-semibold text-ink">{session.name}</div>
             <Link
-              href="/api/auth/logout"
+              href="/.auth/logout"
               className="text-[11px] text-ink-muted hover:text-brand-red"
             >
               Sign out

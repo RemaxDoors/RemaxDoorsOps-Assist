@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { CONSENT_COOKIE } from "@/lib/auth/constants";
+const CONSENT_COOKIE = "ops_cookie_consent";
 
 type Choice = "all" | "essential";
 

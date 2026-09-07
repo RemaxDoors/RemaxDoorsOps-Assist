@@ -112,7 +112,7 @@ export function MobileMenu() {
               <Link href="/ncr/new" className="block">
                 <Button className="w-full">Add NCR</Button>
               </Link>
-              <Link href="/api/auth/logout" className="block">
+              <Link href="/.auth/logout" className="block">
                 <Button variant="ghost" className="w-full">
                   Sign out
                 </Button>
