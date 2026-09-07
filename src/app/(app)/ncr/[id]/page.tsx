@@ -9,7 +9,7 @@ import { RefreshButton } from "@/components/ui/RefreshButton";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TaskButton } from "@/app/(app)/ncr/[id]/TaskButton";
 import { CorrectiveActionForm } from "@/app/(app)/ncr/[id]/CorrectiveActionForm";
-import { isSimproConfigured } from "@/lib/simpro/client";
+import { isSimproConfigured, simproJobUrl } from "@/lib/simpro/client";
 import { getNcr } from "@/lib/repositories/ncr.repo";
 import { listNcrAttachments } from "@/lib/repositories/attachment.repo";
 import { listEmployees } from "@/lib/repositories/employee.repo";
@@ -56,6 +56,19 @@ export default async function NcrDetailPage({
 
   if (!ncr) notFound();
 
+  /**
+   * The Simpro job now comes from the NCR's own uqarSimproJobID rather than
+   * being repeated on every attachment row — one link per NCR, and nothing
+   * written into M1's Attachments table.
+   */
+  const simproJobHref =
+    isSimproConfigured() && ncr.simproJobId ? simproJobUrl(ncr.simproJobId) : null;
+
+  // Severity sits with the classification above; this block is the cost of it.
+  const hasImpact = Boolean(
+    ncr.actualHours > 0 || ncr.additionalCost || ncr.additionalCostDetail,
+  );
+
   /** Employee IDs are terse ("DW"), so show the name and keep the ID beside it. */
   const person = (employeeId: string | null) => {
     if (!employeeId) return "Unassigned";
@@ -76,7 +89,14 @@ export default async function NcrDetailPage({
           <>
             <RefreshButton />
             {isSimproConfigured() ? (
-              <TaskButton context={{ ncrId: ncr.id, simproJobId: ncr.jobId }} />
+              <TaskButton
+                context={{
+                  // uqarSimproJobID, not qarJobID: the latter is M1's own job
+                  // number (a sales order), which means nothing to Simpro.
+                  ncrId: ncr.id,
+                  simproJobId: ncr.simproJobId,
+                }}
+              />
             ) : null}
             <Link href="/ncr">
               <Button variant="secondary">Back to list</Button>
@@ -110,6 +130,16 @@ export default async function NcrDetailPage({
                 value={ncr.cause?.description ?? "-"}
                 hint={ncr.cause?.id}
               />
+              <Detail
+                label="Severity"
+                value={
+                  ncr.severity ? (
+                    <Badge tone={severityTone(ncr.severity)}>{ncr.severity}</Badge>
+                  ) : (
+                    "-"
+                  )
+                }
+              />
               <Detail label="Quantity affected" value={String(ncr.quantity)} />
               <Detail label="Reported by" value={person(ncr.reportedBy)} />
               <Detail label="Assigned to" value={person(ncr.assignedTo)} />
@@ -122,13 +152,44 @@ export default async function NcrDetailPage({
               <Detail
                 label="Raised"
                 value={formatDate(ncr.createdAt)}
-                hint={ncr.createdBy ?? undefined}
+                hint={ncr.createdBy ? person(ncr.createdBy) : undefined}
               />
               <Detail
                 label="Corrective action date"
                 value={formatDate(ncr.correctiveActionDate)}
               />
             </dl>
+
+            {/*
+              What it cost. Kept apart from the fields above because it is
+              usually filled in later, and hidden entirely when nothing has
+              been recorded so an NCR raised from the floor shows no empty rows.
+            */}
+            {hasImpact ? (
+              <div className="mt-5 border-t border-line pt-5">
+                <p className="mb-3 text-[11px] font-bold tracking-wide text-ink-muted uppercase">
+                  Impact
+                </p>
+                <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+                  {ncr.actualHours > 0 ? (
+                    <Detail
+                      label="Hours spent"
+                      value={`${ncr.actualHours} hour${ncr.actualHours === 1 ? "" : "s"}`}
+                    />
+                  ) : null}
+                  {ncr.additionalCost ? (
+                    <Detail
+                      label="Extra cost"
+                      value={currency(ncr.additionalCost)}
+                      hint={ncr.additionalCostDetail ?? undefined}
+                    />
+                  ) : null}
+                  {ncr.additionalCostDetail && !ncr.additionalCost ? (
+                    <Detail label="Cost detail" value={ncr.additionalCostDetail} />
+                  ) : null}
+                </dl>
+              </div>
+            ) : null}
           </CardBody>
         </Card>
 
@@ -136,6 +197,18 @@ export default async function NcrDetailPage({
           <CardHeader
             title="Attachments"
             subtitle={`${attachments.length} file${attachments.length === 1 ? "" : "s"}`}
+            action={
+              simproJobHref ? (
+                <a
+                  href={simproJobHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[12px] font-bold text-brand-red hover:underline"
+                >
+                  Open job in Simpro →
+                </a>
+              ) : null
+            }
           />
           {attachments.length === 0 ? (
             <EmptyState message="No photos or documents on this NCR." />
@@ -153,16 +226,6 @@ export default async function NcrDetailPage({
                     {formatDate(file.createdAt)}
                     {file.createdBy ? ` · ${file.createdBy}` : ""}
                   </p>
-                  {file.simproLink ? (
-                    <a
-                      href={file.simproLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-1 inline-block text-[12px] font-bold text-brand-red hover:underline"
-                    >
-                      Open in Simpro →
-                    </a>
-                  ) : null}
                 </li>
               ))}
             </ul>
@@ -193,6 +256,29 @@ export default async function NcrDetailPage({
       </div>
     </>
   );
+}
+
+/** Whole dollars — M1 stores uqarNumAddCost as numeric(10,0). */
+function currency(amount: number) {
+  return new Intl.NumberFormat("en-AU", {
+    style: "currency",
+    currency: "AUD",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function severityTone(severity: string): "ok" | "brand" | "danger" | "graphite" {
+  switch (severity.toLowerCase()) {
+    case "critical":
+    case "high":
+      return "danger";
+    case "medium":
+      return "brand";
+    case "low":
+      return "ok";
+    default:
+      return "graphite";
+  }
 }
 
 function Detail({

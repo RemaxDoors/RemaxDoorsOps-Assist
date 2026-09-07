@@ -135,7 +135,6 @@ export async function saveNcrAttachment({
     cmaJobID: jobId ?? "",
     cmaPartID: partId ?? "",
     cmaUploadedFromWeb: true,
-    ucmaSimproLink: (simproLink ?? "").slice(0, 255),
     cmaCreatedBy: createdBy.slice(0, 20),
     cmaCreatedDate: now,
   });
@@ -148,7 +147,6 @@ export type NcrAttachment = {
   filename: string;
   description: string;
   location: string;
-  simproLink: string | null;
   createdAt: string | null;
   createdBy: string | null;
 };
@@ -160,7 +158,6 @@ export async function listNcrAttachments(ncrId: string): Promise<NcrAttachment[]
       "cmaFilename",
       "cmaShortDescription",
       "cmaFileLocation",
-      "ucmaSimproLink",
       "cmaCreatedDate",
       "cmaCreatedBy",
     ],
@@ -173,7 +170,6 @@ export async function listNcrAttachments(ncrId: string): Promise<NcrAttachment[]
     filename: String(row.cmaFilename ?? "").trim(),
     description: String(row.cmaShortDescription ?? "").trim(),
     location: String(row.cmaFileLocation ?? "").trim(),
-    simproLink: String(row.ucmaSimproLink ?? "").trim() || null,
     createdAt: row.cmaCreatedDate
       ? new Date(row.cmaCreatedDate as string).toISOString()
       : null,
@@ -238,7 +234,6 @@ export async function recordQueuedAttachment({
     cmaJobID: jobId ?? "",
     cmaPartID: partId ?? "",
     cmaUploadedFromWeb: true,
-    ucmaSimproLink: (simproLink ?? "").slice(0, 255),
     cmaCreatedBy: createdBy.slice(0, 20),
     cmaCreatedDate: now,
   });

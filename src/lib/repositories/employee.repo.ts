@@ -76,3 +76,44 @@ export async function employeeNameMap(): Promise<Map<string, string>> {
       .filter(([id, name]) => id.length > 0 && name.length > 0),
   );
 }
+
+/**
+ * The M1 employee behind a signed-in Entra account.
+ *
+ * Entra and M1 share no identifier, so the work email is the join. It is the
+ * only field both systems hold for the same person, and M1 fills it in for
+ * staff who have a mailbox. Matching is case-insensitive because M1 records
+ * are typed by hand and Entra normalises to lower case.
+ *
+ * Falls back to an exact name match, which covers workshop staff who have an
+ * M1 record but no email against it. Returns null rather than guessing when
+ * neither matches — a wrong default would quietly attribute someone else's
+ * NCR to the wrong person.
+ */
+export async function findEmployeeForUser({
+  email,
+  name,
+}: {
+  email?: string | null;
+  name?: string | null;
+}): Promise<Employee | null> {
+  const employees = await listEmployees();
+
+  const wanted = (email ?? "").trim().toLowerCase();
+  if (wanted) {
+    const byEmail = employees.find(
+      (employee) => (employee.email ?? "").trim().toLowerCase() === wanted,
+    );
+    if (byEmail) return byEmail;
+  }
+
+  const wantedName = (name ?? "").trim().toLowerCase();
+  if (wantedName) {
+    const byName = employees.find(
+      (employee) => employee.name.trim().toLowerCase() === wantedName,
+    );
+    if (byName) return byName;
+  }
+
+  return null;
+}

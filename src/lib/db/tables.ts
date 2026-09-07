@@ -51,19 +51,29 @@ export const tables = {
       qarNonConformanceText: "text",
       qarNonConformanceRTF: "text",
       qarQuantity: "decimal",
+      qarActualHours: "decimal",
       qarReportedByEmployeeID: "string",
       uqarAssignedToEmployeeID: "string",
       qarCreatedBy: "string",
       qarCreatedDate: "datetime",
       /**
-       * User-defined columns; see m1/M1-Setup.md. Deliberately absent from
-       * `readable`: readRows selects every readable column by default, so
-       * naming a column the DBA has not added yet would break every NCR read.
-       * Writes are guarded by columnExists().
+       * User-defined columns; see m1/M1-Setup.md. They may not exist in a
+       * given M1, so every read and write of them is guarded by
+       * columnExists() and they are never part of a default column list.
        */
       uqarSimproTaskID: "string",
       uqarSimproJobID: "string",
+      uqarSeverity: "string",
+      uqarNumAddCost: "decimal",
+      /** Plain text; uqarAddCostDetail is M1's RTF twin of the same field. */
+      uqarAddCostDetail3: "string",
+      uqarAddCostDetail: "text",
     },
+    /**
+     * Selected by default when a caller names no columns, so this list holds
+     * only columns M1 ships with. The optional user-defined ones are appended
+     * by ncrColumns() once columnExists() has confirmed them.
+     */
     readable: [
       "qarNonConformanceID",
       "qarJobID",
@@ -77,10 +87,16 @@ export const tables = {
       "qarCorrectiveActionText",
       "qarNonConformanceText",
       "qarQuantity",
+      "qarActualHours",
       "qarReportedByEmployeeID",
       "uqarAssignedToEmployeeID",
       "qarCreatedBy",
       "qarCreatedDate",
+      "uqarSimproTaskID",
+      "uqarSimproJobID",
+      "uqarSeverity",
+      "uqarNumAddCost",
+      "uqarAddCostDetail3",
     ],
     // Opened for the Add NCR wizard. The ID itself is allocated by the
     // gateway's insertRowWithAllocatedId, not passed in by callers.
@@ -105,6 +121,11 @@ export const tables = {
       "qarCreatedDate",
       "uqarSimproTaskID",
       "uqarSimproJobID",
+      "qarActualHours",
+      "uqarSeverity",
+      "uqarNumAddCost",
+      "uqarAddCostDetail3",
+      "uqarAddCostDetail",
     ],
   },
 
@@ -124,7 +145,6 @@ export const tables = {
       cmaJobID: "string",
       cmaPartID: "string",
       cmaUploadedFromWeb: "bit",
-      ucmaSimproLink: "string",
       cmaCreatedBy: "string",
       cmaCreatedDate: "datetime",
     },
@@ -136,7 +156,6 @@ export const tables = {
       "cmaFileLocation",
       "cmaFilename",
       "cmaNonConformanceID",
-      "ucmaSimproLink",
       "cmaCreatedBy",
       "cmaCreatedDate",
     ],
@@ -151,7 +170,6 @@ export const tables = {
       "cmaJobID",
       "cmaPartID",
       "cmaUploadedFromWeb",
-      "ucmaSimproLink",
       "cmaCreatedBy",
       "cmaCreatedDate",
     ],

@@ -94,6 +94,53 @@ export async function listClassifications(): Promise<{
   };
 }
 
+/** Columns present in every M1. */
+const NCR_BASE_COLUMNS = [
+  "qarNonConformanceID",
+  "qarJobID",
+  "qarPartID",
+  "qarPartShortDescription",
+  "qarNonConformanceCategoryID",
+  "qarNonConformanceCodeID",
+  "qarNonConformanceCauseID",
+  "qarCorrectiveActionComplete",
+  "qarCorrectiveActionDate",
+  "qarCorrectiveActionText",
+  "qarNonConformanceText",
+  "qarQuantity",
+  "qarActualHours",
+  "qarReportedByEmployeeID",
+  "uqarAssignedToEmployeeID",
+  "qarCreatedBy",
+  "qarCreatedDate",
+] as const;
+
+/**
+ * User-defined columns a given M1 may or may not have.
+ *
+ * Naming one that has not been added yet makes SQL Server reject the whole
+ * statement — "Invalid column name" — which takes down every NCR read rather
+ * than degrading one field. So they are asked for only once columnExists()
+ * has confirmed them, and the answer is cached by the gateway.
+ */
+const NCR_OPTIONAL_COLUMNS = [
+  "uqarSimproJobID",
+  "uqarSimproTaskID",
+  "uqarSeverity",
+  "uqarNumAddCost",
+  "uqarAddCostDetail3",
+] as const;
+
+async function ncrColumns(): Promise<string[]> {
+  const present = await Promise.all(
+    NCR_OPTIONAL_COLUMNS.map((column) => columnExists("ncr", column)),
+  );
+  return [
+    ...NCR_BASE_COLUMNS,
+    ...NCR_OPTIONAL_COLUMNS.filter((_, i) => present[i]),
+  ];
+}
+
 function toNcr(row: Row, maps: Awaited<ReturnType<typeof lookups>>): Ncr {
   const lookup = (map: Map<string, Lookup>, value: unknown) => {
     const id = text(value);
@@ -117,6 +164,13 @@ function toNcr(row: Row, maps: Awaited<ReturnType<typeof lookups>>): Ncr {
     assignedTo: text(row.uqarAssignedToEmployeeID),
     createdBy: text(row.qarCreatedBy),
     createdAt: iso(row.qarCreatedDate) ?? new Date(0).toISOString(),
+    actualHours: Number(row.qarActualHours ?? 0),
+    simproJobId: text(row.uqarSimproJobID),
+    simproTaskId: text(row.uqarSimproTaskID),
+    severity: text(row.uqarSeverity),
+    additionalCost:
+      row.uqarNumAddCost == null ? null : Number(row.uqarNumAddCost),
+    additionalCostDetail: text(row.uqarAddCostDetail3),
   };
 }
 
@@ -152,6 +206,7 @@ function conditions(filter: NcrFilter): Condition[] {
 export async function listNcrs(filter: NcrFilter): Promise<Ncr[]> {
   const [rows, maps] = await Promise.all([
     readRows<Row>("ncr", {
+      columns: await ncrColumns(),
       where: conditions(filter),
       orderBy: { column: "qarCreatedDate", direction: "desc" },
       limit: filter.limit,
@@ -164,6 +219,7 @@ export async function listNcrs(filter: NcrFilter): Promise<Ncr[]> {
 export async function getNcr(id: string): Promise<Ncr | null> {
   const [rows, maps] = await Promise.all([
     readRows<Row>("ncr", {
+      columns: await ncrColumns(),
       where: [{ column: "qarNonConformanceID", op: "eq", value: id }],
       limit: 1,
     }),
@@ -204,7 +260,7 @@ export async function createNcr(
 ): Promise<string> {
   const now = new Date();
 
-  return insertRowWithAllocatedId("ncr", {
+  const values: Record<string, unknown> = {
     qarJobID: input.jobId ?? "",
     qarPartID: input.partId ?? "",
     qarPartShortDescription: (input.partDescription ?? "").slice(0, 50),
@@ -216,11 +272,42 @@ export async function createNcr(
     // M1 stores both; its client reads the RTF and back-fills it otherwise.
     qarNonConformanceRTF: toRtf(input.description),
     qarQuantity: input.quantity,
+    qarActualHours: input.actualHours ?? 0,
     qarReportedByEmployeeID: input.reportedBy,
     uqarAssignedToEmployeeID: input.assignedTo ?? "",
     qarCreatedBy: createdBy.slice(0, 20),
     qarCreatedDate: now,
-  });
+  };
+
+  /**
+   * Optional user-defined columns: recorded when M1 has them, skipped when
+   * not, so a site without them can still raise NCRs.
+   */
+  // uqarSimproJobID is nvarchar(10); a longer value would fail the insert
+  // outright rather than being trimmed.
+  if (input.simproJobId && (await columnExists("ncr", "uqarSimproJobID"))) {
+    values.uqarSimproJobID = input.simproJobId.slice(0, 10);
+  }
+  if (input.severity && (await columnExists("ncr", "uqarSeverity"))) {
+    values.uqarSeverity = input.severity.slice(0, 10);
+  }
+  if (input.additionalCost && (await columnExists("ncr", "uqarNumAddCost"))) {
+    values.uqarNumAddCost = Math.round(input.additionalCost);
+  }
+  if (
+    input.additionalCostDetail &&
+    (await columnExists("ncr", "uqarAddCostDetail3"))
+  ) {
+    const detail = input.additionalCostDetail.slice(0, 200);
+    values.uqarAddCostDetail3 = detail;
+    // M1 keeps the same note twice, plain and RTF, as it does for the
+    // non-conformance and corrective action text.
+    if (await columnExists("ncr", "uqarAddCostDetail")) {
+      values.uqarAddCostDetail = toRtf(detail);
+    }
+  }
+
+  return insertRowWithAllocatedId("ncr", values);
 }
 
 /**

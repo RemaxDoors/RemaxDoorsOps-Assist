@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { isSimproConfigured, listSimproJobParts } from "@/lib/simpro/client";
+import {
+  describeSimproError,
+  isSimproConfigured,
+  listSimproJobParts,
+} from "@/lib/simpro/client";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +16,7 @@ export async function GET(
 
   if (!isSimproConfigured()) {
     return NextResponse.json(
-      { error: "Simpro is not connected — set SIMPRO_BASE_URL and SIMPRO_API_TOKEN" },
+      { error: "Simpro is not connected, so parts cannot be listed. Type the part number instead." },
       { status: 503 },
     );
   }
@@ -20,8 +24,9 @@ export async function GET(
   try {
     return NextResponse.json({ data: await listSimproJobParts(id) });
   } catch (error) {
+    console.error("[simpro] parts lookup failed:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Parts lookup failed" },
+      { error: describeSimproError(error, "That job") },
       { status: 502 },
     );
   }

@@ -52,8 +52,6 @@ export function CreateTaskDialog({
   const [created, setCreated] = useState<{
     taskId: string;
     url: string;
-    jobNoteId: string | null;
-    jobNoteError: string | null;
     reference?: { stored: boolean; message: string | null };
   } | null>(null);
 
@@ -150,19 +148,13 @@ export function CreateTaskDialog({
           <div className="space-y-4 p-5">
             <p className="rounded-sm border border-ok/20 bg-ok-soft px-4 py-3 text-[13px] text-ok">
               Task {created.taskId} created in Simpro.
-              {created.jobNoteId
-                ? ` A note was added to job ${context.simproJobId} so it shows there too.`
+              {context.simproJobId
+                ? ` It is attached to job ${context.simproJobId} and shows on that job's Tasks tab.`
                 : ""}
             </p>
             {created.reference?.message ? (
               <p className="rounded-sm border border-warn/20 bg-warn-soft px-4 py-3 text-[13px] text-warn">
                 {created.reference.message}
-              </p>
-            ) : null}
-            {created.jobNoteError ? (
-              <p className="rounded-sm border border-warn/20 bg-warn-soft px-4 py-3 text-[13px] text-warn">
-                The task was created, but the job note failed:{" "}
-                {created.jobNoteError}
               </p>
             ) : null}
             <div className="flex flex-wrap gap-2">
@@ -240,13 +232,11 @@ export function CreateTaskDialog({
                   <Detail label="Customer" value={context.customer || "-"} />
                   <Detail label="Site" value={context.site || "-"} />
                 </dl>
-                {context.simproJobId ? (
-                  <p className="mt-2 text-[12px] text-ink-muted">
-                    Simpro&apos;s API will not set Project No. on a task, so the
-                    job number goes in the description and a note is added to the
-                    job itself — that is what links the NCR on the job side.
-                  </p>
-                ) : null}
+                <p className="mt-2 text-[12px] text-ink-muted">
+                  {context.simproJobId
+                    ? "The task is attached to this job, so it appears under the job's Tasks tab in Simpro."
+                    : "No Simpro job is recorded on this NCR, so the task will not be attached to one."}
+                </p>
               </div>
 
               <label className="flex items-center gap-2.5">

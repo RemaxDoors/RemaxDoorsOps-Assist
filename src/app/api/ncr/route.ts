@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createNcr, listNcrs } from "@/lib/repositories/ncr.repo";
 import { saveNcrAttachment, storeAttachmentFile } from "@/lib/repositories/attachment.repo";
 import { requireSession } from "@/lib/auth/session";
+import { findEmployeeForUser } from "@/lib/repositories/employee.repo";
 import { isDatabaseUnreachable } from "@/lib/db/errors";
 import { enqueueSubmission } from "@/lib/queue/submissionQueue";
 import { ncrCreateSchema, ncrFilterSchema } from "@/types/ncr";
@@ -52,6 +53,10 @@ export async function POST(request: Request) {
     reportedBy: form.get("reportedBy") ?? "",
     assignedTo: form.get("assignedTo") ?? undefined,
     simproJobId: form.get("simproJobId") ?? undefined,
+    severity: form.get("severity") ?? undefined,
+    actualHours: form.get("actualHours") ?? 0,
+    additionalCost: form.get("additionalCost") ?? 0,
+    additionalCostDetail: form.get("additionalCostDetail") ?? undefined,
   });
 
   if (!payload.success) {
@@ -62,7 +67,19 @@ export async function POST(request: Request) {
   }
 
   const input = payload.data;
-  const createdBy = session.email || session.name;
+
+  /**
+   * qarCreatedBy is nvarchar(20) and every one of M1's existing rows holds an
+   * employee id — "DC", "DJZ", "RP". An email does not fit and does not match:
+   * "g.erel@remaxdoors.com" is 21 characters, so it was being stored silently
+   * truncated and in a format nothing else in M1 uses. Prefer the M1 employee
+   * id, and fall back to a name only when the signed-in user has no M1 record.
+   */
+  const me = await findEmployeeForUser({
+    email: session.email,
+    name: session.name,
+  }).catch(() => null);
+  const createdBy = me?.id ?? (session.name || session.email);
   const warnings: string[] = [];
 
   const files = form

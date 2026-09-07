@@ -371,12 +371,20 @@ export async function countGrouped(
 }
 
 /**
- * Whether a column is actually present, cached per process.
+ * Whether a column is actually present.
  *
  * Lets the app use user-defined M1 columns that a DBA may not have added yet,
- * reporting a clear warning instead of failing the whole operation.
+ * degrading one field instead of failing the whole operation.
+ *
+ * The two answers are cached differently on purpose. "Present" is permanent:
+ * columns are not dropped from M1 under a running app. "Absent" is held for a
+ * minute only, because a DBA adding the column is the expected next event —
+ * caching that forever meant the column was added, nothing changed, and the
+ * app had to be restarted before it noticed. That cost an afternoon once.
  */
-const columnCache = new Map<string, boolean>();
+const PRESENT = Symbol("present");
+const columnCache = new Map<string, typeof PRESENT | number>();
+const ABSENT_TTL_MS = 60_000;
 
 export async function columnExists(
   table: TableKey,
@@ -385,7 +393,10 @@ export async function columnExists(
   const def = tables[table];
   const key = `${def.schema}.${def.name}.${column}`;
   const cached = columnCache.get(key);
-  if (cached !== undefined) return cached;
+  if (cached === PRESENT) return true;
+  if (typeof cached === "number" && Date.now() - cached < ABSENT_TTL_MS) {
+    return false;
+  }
 
   const pool = await getPool();
   const result = await pool
@@ -399,7 +410,7 @@ export async function columnExists(
     );
 
   const present = result.recordset.length > 0;
-  columnCache.set(key, present);
+  columnCache.set(key, present ? PRESENT : Date.now());
   return present;
 }
 

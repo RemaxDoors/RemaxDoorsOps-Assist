@@ -5,7 +5,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { NcrWizard } from "@/app/(app)/ncr/new/NcrWizard";
 import { ServiceGuard } from "@/components/ui/ServiceGuard";
 import { listClassifications } from "@/lib/repositories/ncr.repo";
-import { listEmployees } from "@/lib/repositories/employee.repo";
+import { findEmployeeForUser, listEmployees } from "@/lib/repositories/employee.repo";
+import { requireSession } from "@/lib/auth/session";
 import { isSimproConfigured } from "@/lib/simpro/client";
 
 export const dynamic = "force-dynamic";
@@ -13,10 +14,13 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Add NCR — Operation Help" };
 
 export default async function AddNcrPage() {
+  const session = await requireSession("/ncr/new");
+
   try {
-    const [{ categories, codes, causes }, employees] = await Promise.all([
+    const [{ categories, codes, causes }, employees, me] = await Promise.all([
       listClassifications(),
       listEmployees(),
+      findEmployeeForUser({ email: session.email, name: session.name }),
     ]);
 
     return (
@@ -36,6 +40,7 @@ export default async function AddNcrPage() {
             codes={codes}
             causes={causes}
             employees={employees}
+            defaultReportedBy={me?.id ?? ""}
             simproConnected={isSimproConfigured()}
           />
         </ServiceGuard>

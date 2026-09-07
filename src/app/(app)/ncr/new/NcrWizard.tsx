@@ -14,6 +14,7 @@ import { JobStep, type JobSelection } from "@/app/(app)/ncr/new/JobStep";
 import { CreateTaskDialog } from "@/components/ui/CreateTaskDialog";
 import { IdlePrompt } from "@/components/ui/IdlePrompt";
 import type { Employee } from "@/lib/repositories/employee.repo";
+import { NCR_SEVERITIES } from "@/types/ncr";
 import type { Lookup } from "@/types/ncr";
 
 const STEPS = ["Job", "Details", "Photos", "Assign"] as const;
@@ -25,8 +26,20 @@ type Draft = JobSelection & {
   causeId: string;
   description: string;
   quantity: string;
+  severity: string;
+  actualHours: string;
+  additionalCost: string;
+  additionalCostDetail: string;
   reportedBy: string;
   assignedTo: string;
+};
+
+/** Plain words for what each severity means on the floor. */
+const SEVERITY_LABELS: Record<(typeof NCR_SEVERITIES)[number], string> = {
+  Low: "Low - cosmetic, no rework",
+  Medium: "Medium - rework needed",
+  High: "High - job delayed",
+  Critical: "Critical - safety or customer impact",
 };
 
 const EMPTY: Draft = {
@@ -49,6 +62,10 @@ const EMPTY: Draft = {
   causeId: "",
   description: "",
   quantity: "0",
+  severity: "",
+  actualHours: "",
+  additionalCost: "",
+  additionalCostDetail: "",
   reportedBy: "",
   assignedTo: "",
 };
@@ -58,17 +75,26 @@ export function NcrWizard({
   codes,
   causes,
   employees,
+  defaultReportedBy = "",
   simproConnected,
 }: {
   categories: Lookup[];
   codes: Lookup[];
   causes: Lookup[];
   employees: Employee[];
+  /**
+   * The signed-in user's M1 employee id, when they could be matched. Empty
+   * when they have no M1 record, in which case the picker stays unset rather
+   * than defaulting to the wrong person.
+   */
+  defaultReportedBy?: string;
   simproConnected: boolean;
 }) {
   const router = useRouter();
+  // "Start again" and "raise another" should keep the reporter, not clear it.
+  const blank = { ...EMPTY, reportedBy: defaultReportedBy };
   const [step, setStep] = useState(0);
-  const [draft, setDraft] = useState<Draft>(EMPTY);
+  const [draft, setDraft] = useState<Draft>(blank);
   const [files, setFiles] = useState<PickedFile[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [banner, setBanner] = useState<string | null>(null);
@@ -174,6 +200,10 @@ export function NcrWizard({
     form.set("causeId", draft.causeId);
     form.set("description", draft.description);
     form.set("quantity", draft.quantity || "0");
+    form.set("severity", draft.severity);
+    form.set("actualHours", draft.actualHours || "0");
+    form.set("additionalCost", draft.additionalCost || "0");
+    form.set("additionalCostDetail", draft.additionalCostDetail);
     form.set("reportedBy", draft.reportedBy);
     form.set("assignedTo", draft.assignedTo);
     for (const item of files) form.append("attachments", item.file);
@@ -266,7 +296,7 @@ export function NcrWizard({
               variant="secondary"
               onClick={() => {
                 setResult(null);
-                setDraft(EMPTY);
+                setDraft(blank);
                 setFiles([]);
                 setStep(0);
               }}
@@ -295,7 +325,7 @@ export function NcrWizard({
   }
 
   function restart() {
-    setDraft(EMPTY);
+    setDraft(blank);
     setFiles([]);
     setErrors({});
     setBanner(null);
@@ -398,21 +428,21 @@ export function NcrWizard({
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="Part number">
+                <Field label="Which part?" hint="Leave blank if it is not a stocked part">
                   <Input
                     value={draft.partId}
                     onChange={(e) => set("partId", e.target.value)}
                     placeholder="SWI-UBBG-WE"
                   />
                 </Field>
-                <Field label="Part description">
+                <Field label="What is it called?">
                   <Input
                     value={draft.partDescription}
                     onChange={(e) => set("partDescription", e.target.value)}
                     maxLength={50}
                   />
                 </Field>
-                <Field label="Quantity affected">
+                <Field label="How many affected?" hint="Doors, panels or units">
                   <Input
                     type="number"
                     min={0}
@@ -421,6 +451,63 @@ export function NcrWizard({
                   />
                 </Field>
               </div>
+
+              {/*
+                Impact. M1 exposes these as bare columns on a dense form; asked
+                as plain questions here so a tech does not have to know that
+                "uqarNumAddCost" means "what did it cost us".
+              */}
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Field
+                  label="How serious is it?"
+                  hint="Your best judgement - it can be changed later"
+                >
+                  <Select
+                    value={draft.severity}
+                    onChange={(e) => set("severity", e.target.value)}
+                    options={[
+                      { value: "", label: "Not sure yet" },
+                      ...NCR_SEVERITIES.map((level) => ({
+                        value: level,
+                        label: SEVERITY_LABELS[level],
+                      })),
+                    ]}
+                  />
+                </Field>
+                <Field
+                  label="Hours spent putting it right"
+                  hint="Leave at 0 if the work has not been done"
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.25"
+                    value={draft.actualHours}
+                    onChange={(e) => set("actualHours", e.target.value)}
+                    placeholder="0"
+                  />
+                </Field>
+                <Field label="Extra cost ($)" hint="Materials, freight, callouts">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={draft.additionalCost}
+                    onChange={(e) => set("additionalCost", e.target.value)}
+                    placeholder="0"
+                  />
+                </Field>
+              </div>
+
+              <Field
+                label="What was the extra cost for?"
+                hint="One line, e.g. re-made a pair of doors and re-attended site"
+              >
+                <Input
+                  value={draft.additionalCostDetail}
+                  onChange={(e) => set("additionalCostDetail", e.target.value)}
+                  maxLength={200}
+                />
+              </Field>
             </CardBody>
           </>
         ) : null}

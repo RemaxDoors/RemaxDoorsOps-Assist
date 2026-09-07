@@ -8,6 +8,7 @@ import { RefreshButton } from "@/components/ui/RefreshButton";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { NcrFilters } from "@/app/(app)/ncr/NcrFilters";
 import { listCategories, listNcrs } from "@/lib/repositories/ncr.repo";
+import { listEmployees } from "@/lib/repositories/employee.repo";
 import { daysSince, formatDate } from "@/lib/format";
 import { ncrFilterSchema, type Lookup, type Ncr } from "@/types/ncr";
 
@@ -15,7 +16,16 @@ export const dynamic = "force-dynamic";
 
 export const metadata = { title: "NCR — Operation Help" };
 
-const columns: Column<Ncr>[] = [
+/**
+ * M1 stores who reported an NCR as an employee id, and those ids are terse
+ * ("DW", "GE"). The id is the record; the name is what a person recognises,
+ * so it is resolved from dbo.Employees for display rather than duplicated
+ * into the NCR row.
+ */
+type NameOf = (employeeId: string | null) => string;
+
+function buildColumns(nameOf: NameOf): Column<Ncr>[] {
+  return [
   {
     key: "id",
     header: "NCR",
@@ -77,9 +87,9 @@ const columns: Column<Ncr>[] = [
     className: "w-[140px]",
     render: (row) => (
       <div className="text-[13px]">
-        <div className="text-ink">{row.reportedBy ?? "-"}</div>
+        <div className="text-ink">{nameOf(row.reportedBy)}</div>
         <div className="text-[12px] text-ink-muted">
-          {row.assignedTo ? `→ ${row.assignedTo}` : "Unassigned"}
+          {row.assignedTo ? `→ ${nameOf(row.assignedTo)}` : "Unassigned"}
         </div>
       </div>
     ),
@@ -99,13 +109,15 @@ const columns: Column<Ncr>[] = [
       </div>
     ),
   },
-];
+  ];
+}
 
 /**
  * One NCR as a tappable card. Ordered by what matters on site: which NCR and
  * whether it is still open, then the part, then the problem.
  */
-function ncrCard(row: Ncr) {
+function buildNcrCard(nameOf: NameOf) {
+  return function ncrCard(row: Ncr) {
   return (
     <Link
       href={`/ncr/${row.id}`}
@@ -137,10 +149,11 @@ function ncrCard(row: Ncr) {
             : `closed ${formatDate(row.correctiveActionDate)}`}
         </span>
         <span aria-hidden>·</span>
-        <span>{row.reportedBy ?? "-"}</span>
+        <span>{nameOf(row.reportedBy)}</span>
       </div>
     </Link>
-  );
+    );
+  };
 }
 
 export default async function NcrPage({
@@ -159,11 +172,24 @@ export default async function NcrPage({
 
   let rows: Ncr[] = [];
   let categories: Lookup[] = [];
+  let staff = new Map<string, string>();
   try {
-    [rows, categories] = await Promise.all([listNcrs(filter), listCategories()]);
+    const [ncrs, cats, people] = await Promise.all([
+      listNcrs(filter),
+      listCategories(),
+      listEmployees(),
+    ]);
+    rows = ncrs;
+    categories = cats;
+    staff = new Map(people.map((e) => [e.id, e.name]));
   } catch (error) {
     return <DbError error={error} />;
   }
+
+  // Falls back to the raw id for anyone no longer in dbo.Employees, so a
+  // leaver's NCRs still say who raised them.
+  const nameOf: NameOf = (employeeId) =>
+    employeeId ? (staff.get(employeeId) ?? employeeId) : "-";
 
   return (
     <>
@@ -192,10 +218,10 @@ export default async function NcrPage({
           <NcrFilters categories={categories} />
         </div>
         <DataTable
-          columns={columns}
+          columns={buildColumns(nameOf)}
           rows={rows}
           rowKey={(row) => row.id}
-          card={ncrCard}
+          card={buildNcrCard(nameOf)}
           empty="No NCRs match these filters."
         />
       </Card>

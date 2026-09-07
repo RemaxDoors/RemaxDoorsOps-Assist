@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { fetchSimproJob, isSimproConfigured } from "@/lib/simpro/client";
+import {
+  describeSimproError,
+  fetchSimproJob,
+  isSimproConfigured,
+} from "@/lib/simpro/client";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +18,7 @@ export async function GET(
     return NextResponse.json(
       {
         error:
-          "Simpro is not connected yet — add SIMPRO_BASE_URL and SIMPRO_API_TOKEN to .env.local",
+          "Simpro is not connected, so job lookup is unavailable. Raise the NCR without a job.",
       },
       { status: 503 },
     );
@@ -23,8 +27,10 @@ export async function GET(
   try {
     return NextResponse.json({ data: await fetchSimproJob(id) });
   } catch (error) {
+    // The raw text is for us; the caller is a person filling in a form.
+    console.error("[simpro] job lookup failed:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Simpro lookup failed" },
+      { error: describeSimproError(error, `Job ${id}`) },
       { status: 502 },
     );
   }

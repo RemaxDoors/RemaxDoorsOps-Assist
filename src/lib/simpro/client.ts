@@ -15,7 +15,31 @@ export type SimproAssigneeType = "engineering" | "project-manager";
 export type SimproJobType = "service" | "project";
 
 export function isSimproConfigured() {
-  return Boolean(process.env.SIMPRO_BASE_URL && process.env.SIMPRO_API_TOKEN);
+  return Boolean(
+    process.env.SIMPRO_BASE_URL &&
+      process.env.SIMPRO_API_TOKEN &&
+      resolveCompanyId(process.env.SIMPRO_BASE_URL),
+  );
+}
+
+/**
+ * Which Simpro company to talk to.
+ *
+ * Prefers SIMPRO_COMPANY_ID. Falls back to a company in the base URL, because
+ * ".../api/v1.0/companies/4" is a natural thing to paste there and silently
+ * ignoring it produced requests to company 0 — which Simpro rejects with
+ * "Cannot access jobs for company 0 in multi-company builds", an error that
+ * names neither the setting at fault nor the app that sent it.
+ *
+ * Returns null when neither says, so the caller can fail with a message that
+ * does name the setting.
+ */
+function resolveCompanyId(baseUrl: string | undefined): string | null {
+  const explicit = (process.env.SIMPRO_COMPANY_ID ?? "").trim();
+  if (explicit && explicit !== "0") return explicit;
+
+  const fromUrl = baseUrl?.match(/\/companies\/(\d+)/)?.[1];
+  return fromUrl && fromUrl !== "0" ? fromUrl : null;
 }
 
 /**
@@ -51,11 +75,15 @@ function requireConfig() {
     );
   }
 
-  return {
-    baseUrl: host,
-    token,
-    companyId: process.env.SIMPRO_COMPANY_ID ?? "0",
-  };
+  const companyId = resolveCompanyId(baseUrl);
+  if (!companyId) {
+    throw new Error(
+      "SIMPRO_COMPANY_ID is not set. Simpro is a multi-company build, so " +
+        "every request needs one (Melbourne is 4).",
+    );
+  }
+
+  return { baseUrl: host, token, companyId };
 }
 
 async function simpro<T>(
@@ -81,11 +109,62 @@ async function simpro<T>(
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(
+    throw new SimproError(
       `Simpro ${init.method ?? "GET"} ${path} failed (${response.status}): ${detail.slice(0, 300)}`,
+      response.status,
     );
   }
   return (await response.json()) as T;
+}
+
+/** Carries the HTTP status so callers can say something useful about it. */
+export class SimproError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "SimproError";
+  }
+}
+
+/**
+ * Turns a Simpro failure into something a person on the floor can act on.
+ *
+ * The raw text is written for us, not for them: "Cannot access jobs for
+ * company 0 in multi-company builds" names neither the setting at fault nor
+ * anything a tech could do about it. Every branch here ends with a way to
+ * keep going, because an NCR can always be raised without a job — losing the
+ * report is worse than losing the Simpro link.
+ *
+ * Callers should log the original before calling this; nothing here is
+ * detailed enough to debug from.
+ */
+export function describeSimproError(error: unknown, subject = "That job"): string {
+  const fallback =
+    "Could not reach Simpro. Try again, or raise the NCR without a job.";
+
+  if (!(error instanceof SimproError)) {
+    // Configuration faults (missing token, company or base URL) land here.
+    return "Simpro is not set up correctly, so lookups are unavailable. Raise the NCR without a job and let IT know.";
+  }
+
+  if (error.status === 404) {
+    return `${subject} was not found in Simpro. Check the number — note that the test system holds only some jobs.`;
+  }
+  if (error.status === 401 || error.status === 403) {
+    return "Simpro refused the connection. Raise the NCR without a job and let IT know.";
+  }
+  if (error.status === 422 || error.status === 400) {
+    return "Simpro would not accept that request. Raise the NCR without a job and let IT know.";
+  }
+  if (error.status === 429) {
+    return "Simpro is busy. Wait a moment and try again.";
+  }
+  if (error.status >= 500) {
+    return "Simpro is not responding. Try again shortly, or raise the NCR without a job.";
+  }
+  return fallback;
 }
 
 /** The subset of a Simpro job the NCR wizard prefills from. */

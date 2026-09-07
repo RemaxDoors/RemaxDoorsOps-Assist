@@ -23,7 +23,18 @@ export type Ncr = {
   assignedTo: string | null;
   createdBy: string | null;
   createdAt: string;
+  /** Hours spent putting it right. */
+  actualHours: number;
+  /** Optional M1 user-defined columns; null when the column is not installed. */
+  simproJobId: string | null;
+  simproTaskId: string | null;
+  severity: string | null;
+  additionalCost: number | null;
+  additionalCostDetail: string | null;
 };
+
+/** M1 stores severity free-text (nvarchar(10)); these are the offered values. */
+export const NCR_SEVERITIES = ["Low", "Medium", "High", "Critical"] as const;
 
 export const ncrFilterSchema = z.object({
   status: z.enum(NCR_STATUSES).optional(),
@@ -52,6 +63,10 @@ export const ncrCreateSchema = z.object({
   assignedTo: z.string().trim().max(10).optional(),
   /** Simpro job the details were pulled from, if any. */
   simproJobId: z.string().trim().max(20).optional(),
+  severity: z.enum(NCR_SEVERITIES).optional().or(z.literal("")),
+  actualHours: z.coerce.number().min(0).max(999999).default(0),
+  additionalCost: z.coerce.number().min(0).max(9999999999).default(0),
+  additionalCostDetail: z.string().trim().max(200).optional(),
 });
 
 export type NcrCreateInput = z.infer<typeof ncrCreateSchema>;

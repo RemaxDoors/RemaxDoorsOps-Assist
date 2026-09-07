@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createSimproTask, isSimproConfigured } from "@/lib/simpro/client";
+import {
+  createSimproTask,
+  describeSimproError,
+  isSimproConfigured,
+} from "@/lib/simpro/client";
 import { setNcrSimproReference } from "@/lib/repositories/ncr.repo";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +25,7 @@ const taskSchema = z.object({
 
 export async function POST(request: Request) {
   if (!isSimproConfigured()) {
-    return NextResponse.json({ error: "Simpro is not connected" }, { status: 503 });
+    return NextResponse.json({ error: "Simpro is not connected, so a task cannot be raised." }, { status: 503 });
   }
 
   const payload = taskSchema.safeParse(await request.json());
@@ -62,8 +66,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ data: { ...task, reference } }, { status: 201 });
   } catch (error) {
+    console.error("[simpro] task creation failed:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Task creation failed" },
+      { error: describeSimproError(error, "The task") },
       { status: 502 },
     );
   }
