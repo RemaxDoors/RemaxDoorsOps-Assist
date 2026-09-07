@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { hasValidApiKey } from "@/lib/auth/apiKey";
 
 /**
  * Gate for pages and API routes.
@@ -35,24 +36,6 @@ function isSignedIn(request: NextRequest) {
   );
 }
 
-function hasValidApiKey(request: NextRequest) {
-  const expected = process.env.API_KEY;
-  if (!expected) return false;
-
-  const provided =
-    request.headers.get("x-api-key") ??
-    request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-
-  // Length check first so the comparison below cannot be used as a length oracle.
-  if (!provided || provided.length !== expected.length) return false;
-
-  let mismatch = 0;
-  for (let i = 0; i < expected.length; i++) {
-    mismatch |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
-  }
-  return mismatch === 0;
-}
-
 export function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
@@ -61,7 +44,7 @@ export function middleware(request: NextRequest) {
   const isApi = pathname.startsWith("/api/");
 
   // An API key is accepted on API routes only — never as a way into the UI.
-  if (isApi && hasValidApiKey(request)) return NextResponse.next();
+  if (isApi && hasValidApiKey(request.headers)) return NextResponse.next();
 
   if (process.env.AUTH_DEV_BYPASS === "true") return NextResponse.next();
   if (isSignedIn(request)) return NextResponse.next();

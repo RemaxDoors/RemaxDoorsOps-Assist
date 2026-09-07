@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createNcr, listNcrs } from "@/lib/repositories/ncr.repo";
 import { saveNcrAttachment, storeAttachmentFile } from "@/lib/repositories/attachment.repo";
-import { requireSession } from "@/lib/auth/session";
+import { apiActor } from "@/lib/auth/session";
 import { findEmployeeForUser } from "@/lib/repositories/employee.repo";
 import { isDatabaseUnreachable } from "@/lib/db/errors";
 import { enqueueSubmission } from "@/lib/queue/submissionQueue";
@@ -38,7 +38,17 @@ export async function GET(request: Request) {
  * error, because retrying it would fail the same way and hide the problem.
  */
 export async function POST(request: Request) {
-  const session = await requireSession();
+  // Never requireSession() here: it redirects, and a redirect from an API
+  // route is unreadable to the caller. Middleware has already gated this;
+  // this establishes who to record against, and refuses in JSON if unclear.
+  const session = await apiActor(request.headers);
+  if (!session) {
+    return NextResponse.json(
+      { error: "Unauthorized. Send a valid X-API-Key header, or sign in." },
+      { status: 401 },
+    );
+  }
+
   const form = await request.formData();
 
   const payload = ncrCreateSchema.safeParse({

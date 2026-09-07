@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
-import { getNcr, updateCorrectiveAction } from "@/lib/repositories/ncr.repo";
-import { requireSession } from "@/lib/auth/session";
+import {
+  getNcr,
+  planCorrectiveAction,
+  updateCorrectiveAction,
+} from "@/lib/repositories/ncr.repo";
+import { apiActor } from "@/lib/auth/session";
 import { isDatabaseUnreachable } from "@/lib/db/errors";
 import { ncrUpdateSchema } from "@/types/ncr";
 
@@ -28,7 +32,16 @@ export async function GET(_request: Request, { params }: Context) {
  * overwrite a newer change. Better to say it did not save.
  */
 export async function PATCH(request: Request, { params }: Context) {
-  await requireSession();
+  // See the note in /api/ncr: requireSession() would redirect, which an API
+  // caller cannot read.
+  const actor = await apiActor(request.headers);
+  if (!actor) {
+    return NextResponse.json(
+      { error: "Unauthorized. Send a valid X-API-Key header, or sign in." },
+      { status: 401 },
+    );
+  }
+
   const { id } = await params;
 
   let body: unknown;
@@ -44,6 +57,25 @@ export async function PATCH(request: Request, { params }: Context) {
       { error: "Check the form", issues: payload.error.flatten().fieldErrors },
       { status: 422 },
     );
+  }
+
+  /**
+   * Dry run: ?dryRun=1 reports the row, the fields, and current versus
+   * proposed values, and writes nothing. The plan is built by the same
+   * function the write uses, so it cannot describe something other than what
+   * would happen.
+   */
+  const dryRun = new URL(request.url).searchParams.get("dryRun");
+  if (dryRun === "1" || dryRun === "true") {
+    try {
+      const plan = await planCorrectiveAction(id, payload.data);
+      if (!plan) {
+        return NextResponse.json({ error: `NCR ${id} not found` }, { status: 404 });
+      }
+      return NextResponse.json({ data: { dryRun: true, ...plan } });
+    } catch (error) {
+      return NextResponse.json({ error: message(error) }, { status: 500 });
+    }
   }
 
   try {

@@ -521,13 +521,71 @@ export async function periodActivity(
  * set on completion and cleared if an NCR is reopened — otherwise a reopened
  * record would still count as solved this month.
  */
-export async function updateCorrectiveAction(
+/** One field an update would change, for the dry run. */
+export type ProposedChange = {
+  field: string;
+  current: string | null;
+  proposed: string | null;
+};
+
+export type UpdatePlan = {
+  table: string;
+  primaryKey: string;
+  id: string;
+  changes: ProposedChange[];
+};
+
+const show = (value: unknown): string | null => {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "boolean") return value ? "1" : "0";
+  const text = String(value);
+  return text.length > 120 ? `${text.slice(0, 120)}…` : text;
+};
+
+/**
+ * The values an update would write, without writing them.
+ *
+ * Quality records are not a place to find out afterwards. This returns the
+ * same value map the update uses — built by the same function, so it cannot
+ * drift from what actually happens — paired with what is in M1 today.
+ */
+export async function planCorrectiveAction(
   ncrId: string,
   input: NcrUpdateInput,
-): Promise<Ncr | null> {
+): Promise<UpdatePlan | null> {
   const existing = await getNcr(ncrId);
   if (!existing) return null;
 
+  const values = correctiveActionValues(existing, input);
+  const current = await readRows<Row>("ncr", {
+    columns: Object.keys(values).filter((c) => c !== "qarCorrectiveActionRTF"),
+    where: [{ column: "qarNonConformanceID", op: "eq", value: ncrId }],
+    limit: 1,
+  });
+  const row = current[0] ?? {};
+
+  return {
+    table: `${process.env.DB_SCHEMA ?? "dbo"}.NonConformances`,
+    primaryKey: "qarNonConformanceID",
+    id: ncrId,
+    changes: Object.entries(values).map(([field, proposed]) => ({
+      field,
+      // The RTF twin is generated, never read back — showing 400 characters of
+      // control words would bury the fields a person needs to check.
+      current:
+        field === "qarCorrectiveActionRTF" ? "(generated)" : show(row[field]),
+      proposed:
+        field === "qarCorrectiveActionRTF" ? "(generated from the text)" : show(proposed),
+    })),
+  };
+}
+
+/** Shared by the dry run and the write, so the two cannot disagree. */
+function correctiveActionValues(
+  existing: Ncr,
+  input: NcrUpdateInput,
+): Record<string, unknown> {
   const values: Record<string, unknown> = {
     qarCorrectiveActionText: input.correctiveAction,
     qarCorrectiveActionRTF: input.correctiveAction.trim()
@@ -550,6 +608,17 @@ export async function updateCorrectiveAction(
     values.qarCorrectiveActionDate = null;
   }
 
+  return values;
+}
+
+export async function updateCorrectiveAction(
+  ncrId: string,
+  input: NcrUpdateInput,
+): Promise<Ncr | null> {
+  const existing = await getNcr(ncrId);
+  if (!existing) return null;
+
+  const values = correctiveActionValues(existing, input);
   const affected = await updateRow("ncr", ncrId, values);
   return affected > 0 ? getNcr(ncrId) : null;
 }

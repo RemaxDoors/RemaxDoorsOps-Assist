@@ -61,8 +61,9 @@ export const ncrCreateSchema = z.object({
   quantity: z.coerce.number().min(0).max(1_000_000).default(0),
   reportedBy: z.string().trim().min(1, "Pick who reported it").max(10),
   assignedTo: z.string().trim().max(10).optional(),
-  /** Simpro job the details were pulled from, if any. */
-  simproJobId: z.string().trim().max(20).optional(),
+  /** Simpro job the details were pulled from. uqarSimproJobID is nvarchar(10),
+   *  so validating at 20 would have accepted a value the insert then trimmed. */
+  simproJobId: z.string().trim().max(10).optional(),
   severity: z.enum(NCR_SEVERITIES).optional().or(z.literal("")),
   actualHours: z.coerce.number().min(0).max(999999).default(0),
   additionalCost: z.coerce.number().min(0).max(9999999999).default(0),
