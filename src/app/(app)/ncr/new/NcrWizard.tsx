@@ -209,7 +209,23 @@ export function NcrWizard({
     for (const item of files) form.append("attachments", item.file);
 
     try {
-      const response = await fetch("/api/ncr", { method: "POST", body: form });
+      let response: Response;
+      try {
+        response = await fetch("/api/ncr", { method: "POST", body: form });
+      } catch {
+        // No response at all: offline, or bounced to a sign-in page. The draft
+        // is still on screen, so say what to do rather than what broke.
+        throw new Error(
+          "Could not reach the server, so the NCR was not saved. Your entries are still here — reload the page to sign in again, then submit.",
+        );
+      }
+
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(
+          "Your sign-in has expired, so the NCR was not saved. Your entries are still here — reload the page and submit again.",
+        );
+      }
+
       const body = await response.json();
       if (!response.ok) {
         if (body.issues) {

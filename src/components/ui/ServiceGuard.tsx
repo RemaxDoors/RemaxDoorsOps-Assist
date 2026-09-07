@@ -34,15 +34,25 @@ export function ServiceGuard({
     setChecking(true);
     try {
       const response = await fetch("/api/health", { cache: "no-store" });
-      if (!response.ok && response.status !== 200) {
-        throw new Error(`The app returned ${response.status}`);
+      if (response.status === 401 || response.status === 403) {
+        // The health probe is public, so a 401 here is the platform's, not
+        // ours: the sign-in has lapsed.
+        throw new Error(
+          "Your sign-in has expired. Reload the page to sign in again.",
+        );
+      }
+      if (!response.ok) {
+        throw new Error(`The app returned ${response.status}.`);
       }
       setHealth(await response.json());
       setUnreachable(null);
     } catch (error) {
-      // The app itself is unreachable — dev server stopped, network dropped.
+      // The app itself is unreachable — server stopped, network dropped, or
+      // the request never got a readable response.
       setUnreachable(
-        error instanceof Error ? error.message : "Could not reach the server",
+        error instanceof Error && error.message
+          ? error.message
+          : "Could not reach the server. Check your connection and try again.",
       );
     } finally {
       setChecking(false);

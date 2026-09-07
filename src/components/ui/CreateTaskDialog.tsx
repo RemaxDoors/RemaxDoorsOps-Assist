@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea } from "@/components/ui/Field";
+import { getJson, messageFor, postJson } from "@/lib/http";
 
 /**
  * Raises a Simpro task against an NCR, mirroring Simpro's own Create Task
@@ -56,10 +57,16 @@ export function CreateTaskDialog({
   } | null>(null);
 
   useEffect(() => {
-    fetch("/api/simpro/staff")
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("Could not load staff"))))
-      .then((body) => setStaff(body.data as Staff[]))
-      .catch((e) => setError(e instanceof Error ? e.message : "Could not load staff"))
+    getJson<{ data: Staff[] }>("/api/simpro/staff")
+      .then((body) => setStaff(body.data))
+      .catch((e) =>
+        setError(
+          messageFor(
+            e,
+            "Could not load the Simpro staff list, so there is nobody to assign to.",
+          ),
+        ),
+      )
       .finally(() => setLoadingStaff(false));
   }, []);
 
@@ -80,37 +87,22 @@ export function CreateTaskDialog({
     setSaving(true);
     setError(null);
     try {
-      const response = await fetch("/api/simpro/task", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subject,
-          description,
-          assignedToId: Number(assignedToId),
-          priority,
-          status,
-          dueDate: dueDate || undefined,
-          ncrId: context.ncrId,
-          jobId: context.simproJobId || undefined,
-          customerId: context.customerId ?? undefined,
-          siteId: context.siteId ?? undefined,
-          emailNotifications: notify,
-        }),
+      const body = await postJson<{ data: typeof created }>("/api/simpro/task", {
+        subject,
+        description,
+        assignedToId: Number(assignedToId),
+        priority,
+        status,
+        dueDate: dueDate || undefined,
+        ncrId: context.ncrId,
+        jobId: context.simproJobId || undefined,
+        customerId: context.customerId ?? undefined,
+        siteId: context.siteId ?? undefined,
+        emailNotifications: notify,
       });
-      const body = await response.json();
-      if (!response.ok) {
-        // A 422 means Simpro rejected a value; name the fields it objected to.
-        if (response.status === 422 && body.issues) {
-          const named = Object.entries(body.issues)
-            .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs[0] : msgs}`)
-            .join("; ");
-          throw new Error(`Check the task details — ${named}`);
-        }
-        throw new Error(body.error ?? "Task creation failed");
-      }
       setCreated(body.data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Task creation failed");
+      setError(messageFor(e, "The task could not be created."));
     } finally {
       setSaving(false);
     }

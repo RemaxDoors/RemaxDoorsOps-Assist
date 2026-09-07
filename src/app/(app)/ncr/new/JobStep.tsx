@@ -6,6 +6,7 @@ import { CardBody, CardHeader } from "@/components/ui/Card";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { cn } from "@/lib/cn";
 import type { M1Job } from "@/lib/repositories/job.repo";
+import { getJson, messageFor } from "@/lib/http";
 
 export type JobSource = "simpro" | "m1" | "none";
 export type JobKind = "service" | "project";
@@ -142,9 +143,9 @@ function SimproPanel({
     setParts([]);
 
     try {
-      const response = await fetch(`/api/simpro/job/${encodeURIComponent(jobId)}`);
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "Lookup failed");
+      const body = await getJson<{ data: unknown }>(
+        `/api/simpro/job/${encodeURIComponent(jobId)}`,
+      );
 
       const job = body.data as {
         jobId: string;
@@ -198,17 +199,19 @@ function SimproPanel({
       );
 
       // Cost-centre parts, so the part number can be picked rather than typed.
-      const partsResponse = await fetch(
+      // A failure here is not worth stopping for — the job is already loaded
+      // and the part number can be typed.
+      const found = await getJson<{ data: SimproPart[] }>(
         `/api/simpro/job/${encodeURIComponent(jobId)}/parts`,
-      );
-      const partsBody = await partsResponse.json();
-      const found = partsResponse.ok ? (partsBody.data as SimproPart[]) : [];
+      )
+        .then((partsBody) => partsBody.data)
+        .catch(() => [] as SimproPart[]);
       setParts(found);
 
       // Nothing left to choose here, so go straight on to the details.
       if (found.length === 0) onAdvance();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Simpro lookup failed");
+      setMessage(messageFor(error, "The Simpro job could not be looked up."));
     } finally {
       setState("idle");
     }

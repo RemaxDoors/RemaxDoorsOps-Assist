@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Field, Select, Textarea } from "@/components/ui/Field";
 import type { Employee } from "@/lib/repositories/employee.repo";
+import { messageFor, RequestError } from "@/lib/http";
 
 /**
  * Records the corrective action and closes or reopens the NCR.
@@ -49,30 +50,45 @@ export function CorrectiveActionForm({
     setSaved(null);
 
     try {
-      const response = await fetch(`/api/ncr/${encodeURIComponent(ncrId)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          correctiveAction: text,
-          complete,
-          assignedTo: assignedTo || "",
-        }),
-      });
+      let response: Response;
+      try {
+        response = await fetch(`/api/ncr/${encodeURIComponent(ncrId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            correctiveAction: text,
+            complete,
+            assignedTo: assignedTo || "",
+          }),
+        });
+      } catch {
+        // No response at all: offline, or bounced to a sign-in page.
+        throw new RequestError(
+          "Could not reach the server, so nothing was saved. Reload the page and try again.",
+          null,
+        );
+      }
 
-      const body = await response.json();
+      const body = await response.json().catch(() => null);
       if (!response.ok) {
-        if (response.status === 422 && body.issues) {
+        if (response.status === 401 || response.status === 403) {
+          throw new RequestError(
+            "Your sign-in has expired, so nothing was saved. Reload the page and try again.",
+            response.status,
+          );
+        }
+        if (response.status === 422 && body?.issues) {
           const first = Object.values(body.issues).flat()[0];
           throw new Error(String(first ?? body.error));
         }
-        throw new Error(body.error ?? "Could not save");
+        throw new Error(body?.error ?? "Could not save");
       }
 
       setSaved(complete ? `NCR ${ncrId} closed` : "Saved");
       // Pull the server's version back so the page reflects what M1 now holds.
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save");
+      setError(messageFor(e, "Could not save."));
     } finally {
       setSaving(false);
     }
