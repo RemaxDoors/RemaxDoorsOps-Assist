@@ -22,6 +22,11 @@ export type QueuedSubmission = {
   queuedAt: string;
   /** Who submitted it, for the M1 record once it lands. */
   createdBy: string;
+  /**
+   * Entra display name of whoever raised it, captured at submission time.
+   * Resolving it at drain time is not possible — nobody is signed in then.
+   */
+  authorName?: string | null;
   input: NcrCreateInput;
   /** Absolute paths of files already written to the attachment store. */
   attachmentPaths: string[];

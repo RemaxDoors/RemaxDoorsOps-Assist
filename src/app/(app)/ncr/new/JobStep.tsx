@@ -179,15 +179,15 @@ function SimproPanel({
         // The M1 sales order recorded on the Simpro job is the best starting
         // point for the M1 job number, so it is offered rather than assumed.
         jobId: value.jobId || job.m1SalesOrderNumber || "",
+        // Display only. The stored description is assembled on the server so
+        // that the timestamp and author come from trusted values, and the
+        // Simpro job id lives in uqarSimproJobID rather than in prose.
         jobSummary: [
-          `Simpro job ${job.jobId}: ${job.name}`,
+          job.name,
           job.customer ? `Customer: ${job.customer}` : null,
           job.site ? `Site: ${job.site}` : null,
           job.projectManager ? `Project manager: ${job.projectManager}` : null,
           job.orderNo ? `Order no: ${job.orderNo}` : null,
-          job.m1SalesOrderNumber
-            ? `M1 sales order: ${job.m1SalesOrderNumber}`
-            : null,
           job.m1QuoteNumber ? `M1 quote: ${job.m1QuoteNumber}` : null,
         ]
           .filter(Boolean)

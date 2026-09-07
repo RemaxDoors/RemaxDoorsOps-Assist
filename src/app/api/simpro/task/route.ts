@@ -5,7 +5,10 @@ import {
   describeSimproError,
   isSimproConfigured,
 } from "@/lib/simpro/client";
-import { setNcrSimproReference } from "@/lib/repositories/ncr.repo";
+import {
+  getNcrSimproTaskId,
+  setNcrSimproReference,
+} from "@/lib/repositories/ncr.repo";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +37,27 @@ export async function POST(request: Request) {
       { error: "Check the task details", issues: payload.error.flatten().fieldErrors },
       { status: 422 },
     );
+  }
+
+  /**
+   * One task per NCR. Creating a second is not recoverable through this app —
+   * the field holds one id — and a technician acting on the wrong one is a
+   * real cost. The existing id stays the source of truth; replacing it has to
+   * be a deliberate act, not a second click.
+   */
+  if (payload.data.ncrId) {
+    const existingTaskId = await getNcrSimproTaskId(payload.data.ncrId).catch(
+      () => null,
+    );
+    if (existingTaskId) {
+      return NextResponse.json(
+        {
+          error: "A Simpro task has already been created for this NCR.",
+          data: { existingTaskId, ncrId: payload.data.ncrId },
+        },
+        { status: 409 },
+      );
+    }
   }
 
   try {

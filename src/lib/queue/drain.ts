@@ -13,7 +13,11 @@ import { drainQueue, listFailed, listPending } from "@/lib/queue/submissionQueue
 export async function drainSubmissions() {
   return drainQueue({
     create: async (submission) => {
-      const ncrId = await createNcr(submission.input, submission.createdBy);
+      const ncrId = await createNcr(
+        submission.input,
+        submission.createdBy,
+        submission.authorName ?? null,
+      );
 
       for (const filePath of submission.attachmentPaths) {
         // A failed attachment must not fail the NCR: the record is the point,

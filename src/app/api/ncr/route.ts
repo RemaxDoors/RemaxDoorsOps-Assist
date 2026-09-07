@@ -6,6 +6,7 @@ import { findEmployeeForUser } from "@/lib/repositories/employee.repo";
 import { isDatabaseUnreachable } from "@/lib/db/errors";
 import { enqueueSubmission } from "@/lib/queue/submissionQueue";
 import { ncrCreateSchema, ncrFilterSchema } from "@/types/ncr";
+import { buildDescription } from "@/lib/ncr/description";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,12 @@ export async function POST(request: Request) {
     actualHours: form.get("actualHours") ?? 0,
     additionalCost: form.get("additionalCost") ?? 0,
     additionalCostDetail: form.get("additionalCostDetail") ?? undefined,
+    jobName: form.get("jobName") ?? undefined,
+    customer: form.get("customer") ?? undefined,
+    site: form.get("site") ?? undefined,
+    projectManager: form.get("projectManager") ?? undefined,
+    m1SalesOrderNumber: form.get("m1SalesOrderNumber") ?? undefined,
+    m1QuoteNumber: form.get("m1QuoteNumber") ?? undefined,
   });
 
   if (!payload.success) {
@@ -90,6 +97,24 @@ export async function POST(request: Request) {
     name: session.name,
   }).catch(() => null);
   const createdBy = me?.id ?? (session.name || session.email);
+
+  /**
+   * Assembled here, not in the browser: the timestamp and the author are the
+   * two things a client must not be able to choose, and the author is the
+   * whole point of uqarReportedBy.
+   */
+  const description = buildDescription({
+    issue: input.description,
+    job: {
+      name: input.jobName,
+      customer: input.customer,
+      site: input.site,
+      orderNo: input.m1SalesOrderNumber,
+      projectManager: input.projectManager,
+      m1QuoteNumber: input.m1QuoteNumber,
+    },
+    author: session.name || session.email || "Unknown user",
+  });
   const warnings: string[] = [];
 
   const files = form
@@ -107,7 +132,11 @@ export async function POST(request: Request) {
 
   let ncrId: string;
   try {
-    ncrId = await createNcr(input, createdBy);
+    ncrId = await createNcr(
+      { ...input, description },
+      createdBy,
+      session.name || null,
+    );
   } catch (error) {
     if (!isDatabaseUnreachable(error)) {
       return NextResponse.json({ error: message(error) }, { status: 500 });
@@ -125,7 +154,11 @@ export async function POST(request: Request) {
 
     const queued = await enqueueSubmission({
       createdBy,
-      input,
+      authorName: session.name || null,
+      // The assembled description, not the raw entry: rebuilding it at drain
+      // time would stamp the audit line with the hour M1 came back rather
+      // than the hour the person actually reported the problem.
+      input: { ...input, description },
       attachmentPaths,
     });
 

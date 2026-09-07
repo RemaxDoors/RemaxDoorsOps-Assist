@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { hasValidApiKey } from "@/lib/auth/apiKey";
+import { identityTrust, onAppService } from "@/lib/auth/platform";
 
 /**
  * Gate for pages and API routes.
@@ -31,6 +32,10 @@ function isPublic(pathname: string) {
 }
 
 function isSignedIn(request: NextRequest) {
+  // Same rule as getSession(): the headers are only believable while App
+  // Service Authentication is enabled to strip client-supplied ones.
+  if (onAppService() && !identityTrust().trusted) return false;
+
   return Boolean(
     request.headers.get(PRINCIPAL_NAME) ?? request.headers.get(PRINCIPAL_ID),
   );

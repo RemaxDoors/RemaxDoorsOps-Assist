@@ -29,6 +29,8 @@ export type Ncr = {
   simproJobId: string | null;
   simproTaskId: string | null;
   severity: string | null;
+  /** Entra display name of whoever raised it, from uqarReportedBy. */
+  reportedByName: string | null;
   additionalCost: number | null;
   additionalCostDetail: string | null;
 };
@@ -68,6 +70,17 @@ export const ncrCreateSchema = z.object({
   actualHours: z.coerce.number().min(0).max(999999).default(0),
   additionalCost: z.coerce.number().min(0).max(9999999999).default(0),
   additionalCostDetail: z.string().trim().max(200).optional(),
+  /**
+   * Job context for the description. Descriptive only — the identifiers that
+   * matter (Simpro job, task, author) come from their own fields, so nothing
+   * here is load-bearing if a client sends something odd.
+   */
+  jobName: z.string().trim().max(200).optional(),
+  customer: z.string().trim().max(200).optional(),
+  site: z.string().trim().max(200).optional(),
+  projectManager: z.string().trim().max(120).optional(),
+  m1SalesOrderNumber: z.string().trim().max(40).optional(),
+  m1QuoteNumber: z.string().trim().max(40).optional(),
 });
 
 export type NcrCreateInput = z.infer<typeof ncrCreateSchema>;

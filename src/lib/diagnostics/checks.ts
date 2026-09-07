@@ -7,6 +7,8 @@ import { isDatabaseConfigured, missingDbConfig } from "@/lib/db/client";
 import { isSimproConfigured, listSimproStaff } from "@/lib/simpro/client";
 import { listFailed, listPending } from "@/lib/queue/submissionQueue";
 import { tables, type TableKey } from "@/lib/db/tables";
+import { environmentState } from "@/lib/config/environment";
+import { identityTrust, onAppService } from "@/lib/auth/platform";
 
 /**
  * Self-checks that run *inside* the deployed environment.
@@ -122,7 +124,7 @@ async function platformChecks(): Promise<Check[]> {
   const store = await headers();
   const principal =
     store.get("x-ms-client-principal-name") ?? store.get("x-ms-client-principal-id");
-  const onAppService = Boolean(process.env.WEBSITE_SITE_NAME);
+  const isAppService = onAppService();
 
   const checks: Check[] = [
     {
@@ -130,7 +132,7 @@ async function platformChecks(): Promise<Check[]> {
       group: "Platform",
       label: "Hosting",
       status: "pass",
-      detail: onAppService
+      detail: isAppService
         ? `Azure App Service — ${process.env.WEBSITE_SITE_NAME}, instance ${
             process.env.WEBSITE_INSTANCE_ID?.slice(0, 8) ?? "unknown"
           }`
@@ -145,7 +147,8 @@ async function platformChecks(): Promise<Check[]> {
     },
   ];
 
-  if (onAppService) {
+  if (isAppService) {
+    const trust = identityTrust();
     checks.push({
       id: "platform.easyauth",
       group: "Platform",
@@ -155,9 +158,53 @@ async function platformChecks(): Promise<Check[]> {
         ? `Identity headers present — signed in as ${principal}`
         : "No identity headers on this request. Either this was called with an API key, or the identity provider is not attaching them.",
     });
+    checks.push({
+      id: "platform.identity-trust",
+      group: "Platform",
+      label: "Identity headers can be trusted",
+      // Unverified is a warning, not a pass: it means we could not confirm the
+      // platform is stripping client-supplied identity headers.
+      status:
+        trust.basis === "verified"
+          ? "pass"
+          : trust.basis === "disabled"
+            ? "fail"
+            : "warn",
+      detail: trust.detail,
+    });
   }
 
   return checks;
+}
+
+/* ------------------------------------------------------------- environment */
+
+/**
+ * Which world each integration is pointed at. A production M1 paired with a
+ * QA Simpro writes a real quality record and a task nobody reads.
+ */
+function environmentChecks(): Check[] {
+  const state = environmentState();
+  const named = (value: string) => value !== "unknown";
+
+  return [
+    {
+      id: "env.declared",
+      group: "Environment",
+      label: "Declared environments",
+      status: named(state.m1) && named(state.simpro) ? "pass" : "warn",
+      detail: `Application ${state.app} · M1 ${state.m1} · Simpro ${state.simpro}`,
+    },
+    {
+      id: "env.writes",
+      group: "Environment",
+      label: "Writes to M1 and Simpro",
+      status: state.writesAllowed ? "pass" : "fail",
+      detail: state.writesAllowed
+        ? `Enabled. ${state.reason}`
+        : `BLOCKED. ${state.reason}`,
+    },
+  ];
 }
 
 /* ---------------------------------------------------------------- database */
@@ -192,6 +239,7 @@ const OPTIONAL_COLUMNS: Array<[TableKey, string, string]> = [
   ["ncr", "uqarSimproJobID", "Simpro job link on the NCR"],
   ["ncr", "uqarSimproTaskID", "Simpro task id stored back on the NCR"],
   ["ncr", "uqarSeverity", "Severity"],
+  ["ncr", "uqarReportedBy", "Entra display name of whoever raised it"],
   ["ncr", "uqarNumAddCost", "Extra cost"],
   ["ncr", "uqarAddCostDetail3", "What the extra cost was for"],
 ];
@@ -408,6 +456,7 @@ export async function runDiagnostics(): Promise<Diagnostics> {
 
   const groups = await Promise.all([
     Promise.resolve(settingChecks()),
+    Promise.resolve(environmentChecks()),
     platformChecks(),
     databaseChecks(),
     simproChecks(),

@@ -79,11 +79,30 @@ export async function PATCH(request: Request, { params }: Context) {
   }
 
   try {
-    const updated = await updateCorrectiveAction(id, payload.data);
-    if (!updated) {
+    const result = await updateCorrectiveAction(id, payload.data);
+    if (!result) {
       return NextResponse.json({ error: `NCR ${id} not found` }, { status: 404 });
     }
-    return NextResponse.json({ data: updated });
+
+    // A field that did not store what was sent is reported, not ignored:
+    // silent truncation on a quality record is exactly what an audit finds.
+    const mismatched = result.verification.filter((f) => !f.verified);
+    if (mismatched.length > 0) {
+      console.error("[m1] write-back mismatch on NCR", id, mismatched);
+    }
+
+    return NextResponse.json({
+      data: result.ncr,
+      verification: result.verification,
+      ...(mismatched.length > 0
+        ? {
+            warnings: mismatched.map(
+              (f) =>
+                `${f.field} was saved as "${f.stored}" rather than "${f.intended}".`,
+            ),
+          }
+        : {}),
+    });
   } catch (error) {
     if (isDatabaseUnreachable(error)) {
       return NextResponse.json(

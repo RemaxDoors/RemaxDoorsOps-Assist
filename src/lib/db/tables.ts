@@ -64,6 +64,7 @@ export const tables = {
       uqarSimproTaskID: "string",
       uqarSimproJobID: "string",
       uqarSeverity: "string",
+      uqarReportedBy: "string",
       uqarNumAddCost: "decimal",
       /** Plain text; uqarAddCostDetail is M1's RTF twin of the same field. */
       uqarAddCostDetail3: "string",
@@ -95,6 +96,7 @@ export const tables = {
       "uqarSimproTaskID",
       "uqarSimproJobID",
       "uqarSeverity",
+      "uqarReportedBy",
       "uqarNumAddCost",
       "uqarAddCostDetail3",
     ],
@@ -123,6 +125,7 @@ export const tables = {
       "uqarSimproJobID",
       "qarActualHours",
       "uqarSeverity",
+      "uqarReportedBy",
       "uqarNumAddCost",
       "uqarAddCostDetail3",
       "uqarAddCostDetail",

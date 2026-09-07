@@ -2,6 +2,7 @@ import "server-only";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { hasValidApiKey } from "@/lib/auth/apiKey";
+import { identityTrust, onAppService } from "@/lib/auth/platform";
 
 /**
  * Identity comes from App Service Authentication ("Easy Auth"), not from this
@@ -79,6 +80,13 @@ export async function getSession(): Promise<Session | null> {
   if (!principalName && !principalId) {
     return isDevBypass() ? devSession() : null;
   }
+
+  /**
+   * Headers alone are not proof. They are only meaningful because App Service
+   * Authentication strips any a client sent and re-issues its own; with the
+   * feature off, anyone could claim to be anyone. See lib/auth/platform.ts.
+   */
+  if (onAppService() && !identityTrust().trusted) return null;
 
   const principal = decodePrincipal(store.get(PRINCIPAL));
   const email = claim(principal, EMAIL_CLAIMS) ?? principalName ?? "";

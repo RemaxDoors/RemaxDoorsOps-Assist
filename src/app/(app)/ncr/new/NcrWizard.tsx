@@ -131,16 +131,10 @@ export function NcrWizard({
   // the person writes underneath the job context. Done here rather than on
   // Continue because a Simpro lookup can advance the step itself, before the
   // fetched details have been applied to the draft.
-  useEffect(() => {
-    if (!draft.jobSummary) return;
-    setDraft((current) =>
-      current.description.trim()
-        ? current
-        : { ...current, description: `${current.jobSummary}
-
-` },
-    );
-  }, [draft.jobSummary]);
+  // The description used to be seeded with the job summary so the person
+  // wrote underneath it. It is no longer: the server prepends that context,
+  // along with a server-side timestamp and the authenticated user, so the
+  // field holds only what the person actually reports.
 
   /** Whatever is stopping this step from advancing, shown by the button. */
   const blockingError =
@@ -193,6 +187,12 @@ export function NcrWizard({
     const form = new FormData();
     form.set("jobId", draft.jobId);
     form.set("simproJobId", draft.simproJobId);
+    // Job context for the description, assembled server-side.
+    form.set("jobName", draft.jobSummary.split(String.fromCharCode(10))[0] ?? "");
+    form.set("customer", draft.customer);
+    form.set("site", draft.site);
+    form.set("projectManager", draft.projectManager);
+    form.set("m1SalesOrderNumber", draft.m1SalesOrderNumber);
     form.set("partId", draft.partId);
     form.set("partDescription", draft.partDescription);
     form.set("categoryId", draft.categoryId);

@@ -9,6 +9,7 @@ import {
   type Condition,
 } from "@/lib/db/gateway";
 import { toRtf } from "@/lib/m1/rtf";
+import { assertWritesAllowed } from "@/lib/config/environment";
 import type {
   Dimension,
   Lookup,
@@ -127,6 +128,7 @@ const NCR_OPTIONAL_COLUMNS = [
   "uqarSimproJobID",
   "uqarSimproTaskID",
   "uqarSeverity",
+  "uqarReportedBy",
   "uqarNumAddCost",
   "uqarAddCostDetail3",
 ] as const;
@@ -168,6 +170,7 @@ function toNcr(row: Row, maps: Awaited<ReturnType<typeof lookups>>): Ncr {
     simproJobId: text(row.uqarSimproJobID),
     simproTaskId: text(row.uqarSimproTaskID),
     severity: text(row.uqarSeverity),
+    reportedByName: text(row.uqarReportedBy),
     additionalCost:
       row.uqarNumAddCost == null ? null : Number(row.uqarNumAddCost),
     additionalCostDetail: text(row.uqarAddCostDetail3),
@@ -257,7 +260,16 @@ export async function countUnassigned(): Promise<number> {
 export async function createNcr(
   input: NcrCreateInput,
   createdBy: string,
+  /**
+   * The Entra display name of the person signed in. Separate from
+   * input.reportedBy, which is an M1 employee id chosen in the form: this is
+   * who was actually at the keyboard, and it is never taken from the form.
+   */
+  authenticatedUserName?: string | null,
 ): Promise<string> {
+  // A production M1 record must not be raised against a test Simpro job.
+  assertWritesAllowed();
+
   const now = new Date();
 
   const values: Record<string, unknown> = {
@@ -291,6 +303,14 @@ export async function createNcr(
   if (input.severity && (await columnExists("ncr", "uqarSeverity"))) {
     values.uqarSeverity = input.severity.slice(0, 10);
   }
+  if (
+    authenticatedUserName &&
+    (await columnExists("ncr", "uqarReportedBy"))
+  ) {
+    // Column length is confirmed at runtime, not assumed — see the note on
+    // NEEDS CONFIRMATION in the mapping. 60 is M1's usual width for a name.
+    values.uqarReportedBy = authenticatedUserName.slice(0, 60);
+  }
   if (input.additionalCost && (await columnExists("ncr", "uqarNumAddCost"))) {
     values.uqarNumAddCost = Math.round(input.additionalCost);
   }
@@ -317,6 +337,85 @@ export async function createNcr(
  * not been added yet this returns a message rather than throwing, so raising
  * the task still succeeds.
  */
+export type FieldVerification = {
+  field: string;
+  previous: string | null;
+  intended: string | null;
+  stored: string | null;
+  verified: boolean;
+};
+
+/**
+ * Reads a written row back and compares it to what was sent.
+ *
+ * SQL Server does not report a silent narrowing — an over-long string, a
+ * decimal rounded to the column's scale — it just stores something else. On a
+ * quality record that is the kind of difference nobody notices until an audit,
+ * so the write says what actually landed rather than assuming.
+ */
+async function verifyWrite(
+  ncrId: string,
+  intended: Record<string, unknown>,
+  previous: Row,
+): Promise<FieldVerification[]> {
+  const fields = Object.keys(intended).filter((f) => !f.endsWith("RTF"));
+  const rows = await readRows<Row>("ncr", {
+    columns: fields,
+    where: [{ column: "qarNonConformanceID", op: "eq", value: ncrId }],
+    limit: 1,
+  });
+  const stored = rows[0] ?? {};
+
+  return fields.map((field) => {
+    const intendedText = show(intended[field]);
+    const storedText = show(stored[field]);
+    return {
+      field,
+      previous: show(previous[field]),
+      intended: intendedText,
+      stored: storedText,
+      // Dates round-trip through the driver with different precision, so
+      // compare the instant rather than the text.
+      verified: sameValue(intended[field], stored[field]),
+    };
+  });
+}
+
+function sameValue(intended: unknown, stored: unknown): boolean {
+  if (intended === null || intended === undefined) {
+    return stored === null || stored === undefined || stored === "";
+  }
+  if (intended instanceof Date) {
+    const storedDate = stored ? new Date(stored as string) : null;
+    return Boolean(storedDate) && Math.abs(
+      storedDate!.getTime() - intended.getTime(),
+    ) < 1000;
+  }
+  if (typeof intended === "boolean") return Boolean(stored) === intended;
+  if (typeof intended === "number") return Number(stored) === intended;
+  return String(stored ?? "").trim() === String(intended).trim();
+}
+
+/**
+ * The Simpro task already recorded against an NCR, if any.
+ *
+ * Read before creating a task so a second one is never raised for the same
+ * NCR. Returns null when the column does not exist, which is indistinguishable
+ * from "no task" for the caller and is the safe reading: without the column we
+ * cannot know, and blocking every task would be worse than the duplicate risk
+ * the column was added to remove.
+ */
+export async function getNcrSimproTaskId(ncrId: string): Promise<string | null> {
+  if (!(await columnExists("ncr", "uqarSimproTaskID"))) return null;
+
+  const rows = await readRows<Row>("ncr", {
+    columns: ["uqarSimproTaskID"],
+    where: [{ column: "qarNonConformanceID", op: "eq", value: ncrId }],
+    limit: 1,
+  });
+  return text(rows[0]?.uqarSimproTaskID);
+}
+
 export async function setNcrSimproReference(
   ncrId: string,
   { taskId, simproJobId }: { taskId: string; simproJobId?: string | null },
@@ -614,11 +713,29 @@ function correctiveActionValues(
 export async function updateCorrectiveAction(
   ncrId: string,
   input: NcrUpdateInput,
-): Promise<Ncr | null> {
+): Promise<{ ncr: Ncr; verification: FieldVerification[] } | null> {
+  assertWritesAllowed();
+
   const existing = await getNcr(ncrId);
   if (!existing) return null;
 
   const values = correctiveActionValues(existing, input);
+
+  // Captured before the write so the verification can report what changed
+  // from, not only what it changed to.
+  const beforeRows = await readRows<Row>("ncr", {
+    columns: Object.keys(values).filter((f) => !f.endsWith("RTF")),
+    where: [{ column: "qarNonConformanceID", op: "eq", value: ncrId }],
+    limit: 1,
+  });
+
   const affected = await updateRow("ncr", ncrId, values);
-  return affected > 0 ? getNcr(ncrId) : null;
+  if (affected === 0) return null;
+
+  const [ncr, verification] = await Promise.all([
+    getNcr(ncrId),
+    verifyWrite(ncrId, values, beforeRows[0] ?? {}),
+  ]);
+
+  return ncr ? { ncr, verification } : null;
 }
