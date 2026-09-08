@@ -148,7 +148,35 @@ export default async function NcrDetailPage({
                 value={ncr.partId ?? "-"}
                 hint={ncr.partDescription ?? undefined}
               />
-              <Detail label="Job" value={ncr.jobId ?? "-"} />
+              <Detail label="M1 job" value={ncr.jobId ?? "-"} />
+              {/*
+                uqarSimproJobID, shown as a field in its own right. It used to
+                appear only as a link on the attachments card, which made a
+                stored value look missing — and it is the identifier a planner
+                needs to read off the record.
+              */}
+              <Detail
+                label="Simpro job"
+                value={
+                  ncr.simproJobId ? (
+                    simproJobHref ? (
+                      <a
+                        href={simproJobHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-semibold text-brand-red hover:underline"
+                      >
+                        {ncr.simproJobId} →
+                      </a>
+                    ) : (
+                      ncr.simproJobId
+                    )
+                  ) : (
+                    "-"
+                  )
+                }
+                hint={ncr.simproTaskId ? `Task ${ncr.simproTaskId}` : undefined}
+              />
               <Detail
                 label="Raised"
                 value={formatDate(ncr.createdAt)}
@@ -194,21 +222,14 @@ export default async function NcrDetailPage({
         </Card>
 
         <Card>
+          {/*
+            The Simpro link lives on the Details card now, next to the job
+            number it belongs to. Repeating it here put an identifier in a
+            place nobody would look for one.
+          */}
           <CardHeader
             title="Attachments"
             subtitle={`${attachments.length} file${attachments.length === 1 ? "" : "s"}`}
-            action={
-              simproJobHref ? (
-                <a
-                  href={simproJobHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[12px] font-bold text-brand-red hover:underline"
-                >
-                  Open job in Simpro →
-                </a>
-              ) : null
-            }
           />
           {attachments.length === 0 ? (
             <EmptyState message="No photos or documents on this NCR." />
