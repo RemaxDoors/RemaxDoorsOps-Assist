@@ -4,6 +4,9 @@ import { identityTrust, onAppService } from "@/lib/auth/platform";
 /**
  * A backstop, not an authentication system.
  *
+ * Named `proxy` because Next 16 renamed the middleware convention; the
+ * behaviour is unchanged.
+ *
  * App Service Authentication is the boundary: it signs the user in before the
  * request reaches this app and attaches the result as headers. With "Require
  * authentication" it also refuses anonymous requests at the edge, so in normal
@@ -46,7 +49,7 @@ function isSignedIn(request: NextRequest) {
   );
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
   if (isPublic(pathname)) return NextResponse.next();

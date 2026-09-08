@@ -96,9 +96,9 @@ Two ways to authenticate:
 - A browser session, which is how the "Try it" buttons work.
 
 `/api/health` and `/api/health/db` are open; everything else requires one of
-the two. `src/middleware.ts` enforces this — note it must live in `src/`,
-because this project uses a `src` directory. At the project root it is silently
-ignored.
+the two. `src/proxy.ts` enforces this — Next 16 renamed the middleware
+convention to "proxy", and the file must live in `src/` because this project
+uses a `src` directory. At the project root it is silently ignored.
 
 ## Configuration (`.env.local`)
 
@@ -128,7 +128,7 @@ Configure it once, in the portal:
 That last setting matters. "Require authentication" has the platform reject
 every anonymous request before the app sees it, which also blocks the health
 probe and every API-key caller — neither can complete an interactive sign-in.
-Allowing them through lets `src/middleware.ts` decide: signed-in users and
+Allowing them through lets `src/proxy.ts` decide: signed-in users and
 valid API keys pass, everyone else is sent to `/.auth/login/aad`.
 
 App Service is not in front of `next dev`, so locally there are no principal
