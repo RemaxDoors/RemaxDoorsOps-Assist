@@ -58,6 +58,24 @@ function claim(principal: Principal | null, names: string[]): string | null {
   return null;
 }
 
+/**
+ * Drops the organisation suffix this tenant appends to display names.
+ *
+ * Entra returns "Gizem Erel | Remax Doors" — the part after the pipe is a
+ * directory convention for telling accounts apart, not part of anyone's name.
+ * Stripped here rather than at each call site because the same value reaches
+ * the top bar, the NCR description footer and uqarReportedBy in M1, and a
+ * quality record should say who raised it, not which directory they are in.
+ *
+ * Only the first segment is kept, and only when it leaves something behind —
+ * a name that is somehow all suffix is returned untouched rather than blanked.
+ */
+function withoutOrgSuffix(name: string): string {
+  const [first] = name.split("|");
+  const trimmed = first?.trim();
+  return trimmed ? trimmed : name.trim();
+}
+
 function decodePrincipal(encoded: string | null): Principal | null {
   if (!encoded) return null;
   try {
@@ -93,7 +111,9 @@ export async function getSession(): Promise<Session | null> {
   return {
     sub: principalId ?? email ?? "unknown",
     // Falls back to the email so the top bar never shows an empty name.
-    name: claim(principal, NAME_CLAIMS) ?? principalName ?? email ?? "Ops user",
+    name: withoutOrgSuffix(
+      claim(principal, NAME_CLAIMS) ?? principalName ?? email ?? "Ops user",
+    ),
     email,
   };
 }
