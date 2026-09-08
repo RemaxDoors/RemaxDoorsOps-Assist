@@ -187,6 +187,14 @@ function environmentChecks(): Check[] {
   const state = environmentState();
   const named = (value: string) => value !== "unknown";
 
+  // Environment labels are not secrets, so the actual value is shown — the
+  // whole failure mode here is a name mismatch between Azure and the code,
+  // and "set/not set" would not have revealed it.
+  const declared = (name: string) => {
+    const raw = (process.env[name] ?? "").trim();
+    return raw ? `${name}=${raw}` : `${name} NOT SET`;
+  };
+
   return [
     {
       id: "env.declared",
@@ -194,6 +202,20 @@ function environmentChecks(): Check[] {
       label: "Declared environments",
       status: named(state.m1) && named(state.simpro) ? "pass" : "warn",
       detail: `Application ${state.app} · M1 ${state.m1} · Simpro ${state.simpro}`,
+    },
+    {
+      id: "env.variables",
+      group: "Environment",
+      label: "Environment settings as the process sees them",
+      status:
+        named(state.app) && named(state.m1) && named(state.simpro)
+          ? "pass"
+          : "warn",
+      detail: [
+        declared("APP_ENVIRONMENT"),
+        declared("M1_ENVIRONMENT"),
+        declared("SIMPRO_ENVIRONMENT"),
+      ].join(" · "),
     },
     {
       id: "env.writes",

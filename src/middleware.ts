@@ -22,8 +22,12 @@ import { identityTrust, onAppService } from "@/lib/auth/platform";
 const PRINCIPAL_NAME = "x-ms-client-principal-name";
 const PRINCIPAL_ID = "x-ms-client-principal-id";
 
-/** Open endpoints: the health probe used by monitoring and App Service. */
-const PUBLIC_PREFIXES = ["/api/health"];
+/**
+ * Open endpoints: the health probe used by monitoring, and the identity
+ * diagnostic — which has to answer for an anonymous request to be any use,
+ * and returns only booleans.
+ */
+const PUBLIC_PREFIXES = ["/api/health", "/api/whoami"];
 
 function isPublic(pathname: string) {
   return PUBLIC_PREFIXES.some(
