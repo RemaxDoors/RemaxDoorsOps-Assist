@@ -21,6 +21,8 @@ import { identityTrust, onAppService } from "@/lib/auth/platform";
 /** Set by App Service on every authenticated request. */
 const PRINCIPAL_NAME = "x-ms-client-principal-name";
 const PRINCIPAL_ID = "x-ms-client-principal-id";
+/** The base64 claims blob; present whenever the platform authenticated. */
+const PRINCIPAL = "x-ms-client-principal";
 
 /**
  * Open endpoints: the health probe used by monitoring, and the identity
@@ -59,8 +61,32 @@ export function middleware(request: NextRequest) {
   if (isSignedIn(request)) return NextResponse.next();
 
   if (isApi) {
+    /**
+     * The booleans that decided this, returned with the refusal.
+     *
+     * Reading them from a log stream means correlating a timestamp with a
+     * click; putting them in the body means whoever hit the error can see why
+     * in the same breath. All derived, none of them a value: no header
+     * contents, no key material, nothing that helps an attacker who could not
+     * already send these headers.
+     */
     return NextResponse.json(
-      { error: "Unauthorized. Send a valid X-API-Key header, or sign in." },
+      {
+        error: "Unauthorized. Send a valid X-API-Key header, or sign in.",
+        diagnostics: {
+          path: pathname,
+          hasClientPrincipal: Boolean(request.headers.get(PRINCIPAL)),
+          hasPrincipalName: Boolean(request.headers.get(PRINCIPAL_NAME)),
+          hasPrincipalId: Boolean(request.headers.get(PRINCIPAL_ID)),
+          hasApiKey: Boolean(
+            request.headers.get("x-api-key") ?? request.headers.get("authorization"),
+          ),
+          apiKeyValid: hasValidApiKey(request.headers),
+          apiKeyConfigured: Boolean(process.env.API_KEY),
+          identityTrusted: onAppService() ? identityTrust().trusted : null,
+          onAppService: onAppService(),
+        },
+      },
       { status: 401 },
     );
   }
