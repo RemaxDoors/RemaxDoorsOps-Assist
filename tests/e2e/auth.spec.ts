@@ -77,5 +77,29 @@ test.describe("authentication", () => {
       const response = await request.get("/api/health");
       expect(response.status()).toBe(200);
     });
+
+    /**
+     * The Simpro job lookup is deliberately not gated by this app — the
+     * platform is its only gate, so the wizard's Fetch Job cannot fail on a
+     * session the page itself did not need.
+     *
+     * Asserted so the exemption is visible and deliberate rather than an
+     * accident someone tidies away later.
+     */
+    test("the Simpro job lookup is not gated by the app", async ({ request }) => {
+      const response = await request.get("/api/simpro/job/605787", {
+        maxRedirects: 0,
+      });
+      expect(response.status()).not.toBe(401);
+      expect(response.headers().location).toBeUndefined();
+    });
+
+    /** And the exemption is that one path, not Simpro generally. */
+    test("the rest of the Simpro API is still gated", async ({ request }) => {
+      for (const path of ["/api/simpro/staff", "/api/system"]) {
+        const response = await request.get(path, { maxRedirects: 0 });
+        expect(response.status(), `${path} should still refuse`).toBe(401);
+      }
+    });
   });
 });

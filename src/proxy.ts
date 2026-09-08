@@ -27,11 +27,25 @@ const PRINCIPAL_NAME = "x-ms-client-principal-name";
 const PRINCIPAL_ID = "x-ms-client-principal-id";
 
 /**
- * The health probe stays open so monitoring can reach it. Exclude the same
- * path in App Service (Authentication → excluded paths) or the platform will
- * refuse it before this is consulted.
+ * Paths this app does not gate itself.
+ *
+ * /api/health — so monitoring can reach it.
+ *
+ * /api/simpro/job — the Add NCR wizard's job lookup. It was gated here as
+ * well as at the platform, and that duplication was the source of the "Not
+ * signed in" failures: a lapsed session still let the page render, while the
+ * background lookup was refused. One gate is enough.
+ *
+ * Both lean entirely on App Service Authentication being set to *require*
+ * authentication. While it allows unauthenticated access, these paths answer
+ * anyone with the URL — and the job lookup proxies Simpro with the server's
+ * token, so it would serve job details to the internet. The token itself
+ * never leaves the server either way.
+ *
+ * Exclude the same paths in App Service (Authentication → excluded paths) if
+ * the health probe must keep working once that switch is made.
  */
-const PUBLIC_PREFIXES = ["/api/health"];
+const PUBLIC_PREFIXES = ["/api/health", "/api/simpro/job"];
 
 function isPublic(pathname: string) {
   return PUBLIC_PREFIXES.some(
