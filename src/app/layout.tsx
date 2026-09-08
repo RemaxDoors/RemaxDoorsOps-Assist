@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Montserrat } from "next/font/google";
 import { CookieConsent } from "@/components/layout/CookieConsent";
@@ -16,6 +16,30 @@ const montserrat = Montserrat({
 export const metadata: Metadata = {
   title: "Operation Help — remax DOORS",
   description: "Operations workspace for remax DOORS",
+  // manifest.ts supplies the rest; iOS ignores it and needs these directly.
+  appleWebApp: {
+    capable: true,
+    title: "Operation Help",
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/icons/apple-touch-icon.png",
+  },
+};
+
+/**
+ * Two entries so the browser chrome follows the theme rather than always
+ * showing brand red — on a dark phone a red status bar looks like an alert.
+ */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#1f1f1f" },
+  ],
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
