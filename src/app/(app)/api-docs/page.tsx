@@ -20,7 +20,7 @@ export default async function ApiDocsPage() {
     <>
       <PageHeader
         title="API"
-        description="Call Operation Help from M1, Power BI, scripts or anything else that speaks HTTP."
+        description="The endpoints behind Operation Help, and what each returns."
       />
 
       <Card className="mb-4">
@@ -38,16 +38,16 @@ export default async function ApiDocsPage() {
               Authentication
             </p>
             <p className="mt-1">
-              Send your key as an <code className="text-ink">X-API-Key</code>{" "}
-              header (an <code className="text-ink">Authorization: Bearer</code>{" "}
-              header works too). The key is the{" "}
-              <code className="text-ink">API_KEY</code> value in{" "}
-              <code className="text-ink">.env.local</code> — treat it like a
-              password and keep it out of anything shared.
+              Microsoft Entra, through Azure App Service Authentication. Sign in
+              once and every request from that browser is authenticated — which
+              is how the “Try it” buttons below work. There is no API key and
+              nothing to paste.
             </p>
             <p className="mt-1">
-              Requests from a signed-in browser are accepted without a key,
-              which is how the “Try it” buttons below work.
+              That also means these endpoints are for people and for the app
+              itself, not for unattended callers: a script or a Power BI refresh
+              cannot complete an interactive sign-in. If one needs access, say
+              so and it can be added deliberately rather than left open.
             </p>
           </div>
 

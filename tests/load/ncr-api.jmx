@@ -2,14 +2,24 @@
 <!--
   JMeter plan for Operation Help.
 
-  Headless run:
+  Headless run, against a LOCAL build with AUTH_DEV_BYPASS=true:
     jmeter -n -t tests/load/ncr-api.jmx -l results.jtl -e -o report \
            -Jhost=localhost -Jport=4080 -Jprotocol=http \
-           -Japikey=YOUR_API_KEY -Jusers=10 -Jrampup=10 -Jloops=20
+           -Jusers=10 -Jrampup=10 -Jloops=20
+
+  It can no longer be pointed at Azure. Every endpoint there is behind
+  Microsoft Entra via App Service Authentication, and JMeter cannot complete
+  an interactive sign-in — the API key it used to send was removed because
+  nothing was using it. Only /api/health remains reachable unauthenticated.
+
+  To load-test the deployed app, either capture an AppServiceAuthSession
+  cookie from a signed-in browser and add it as a Cookie header, or exclude
+  the paths under test in App Service Authentication for the duration.
+  Neither is left configured here on purpose.
 
   Read-only by design. It exercises the endpoints that read M1 plus the health
   probe; it does not POST an NCR, because that writes a permanent record into a
-  quality system on every run. Load-test writes against M1_TEST only.
+  quality system on every run. Load-test writes against M1_T1 only.
 -->
 <jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
   <hashTree>
@@ -33,11 +43,6 @@
             <stringProp name="Argument.value">${__P(protocol,http)}</stringProp>
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
-          <elementProp name="apikey" elementType="Argument">
-            <stringProp name="Argument.name">apikey</stringProp>
-            <stringProp name="Argument.value">${__P(apikey,)}</stringProp>
-            <stringProp name="Argument.metadata">=</stringProp>
-          </elementProp>
         </collectionProp>
       </elementProp>
     </TestPlan>
@@ -45,10 +50,6 @@
 
       <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="API key header" enabled="true">
         <collectionProp name="HeaderManager.headers">
-          <elementProp name="" elementType="Header">
-            <stringProp name="Header.name">X-API-Key</stringProp>
-            <stringProp name="Header.value">${apikey}</stringProp>
-          </elementProp>
           <elementProp name="" elementType="Header">
             <stringProp name="Header.name">Accept</stringProp>
             <stringProp name="Header.value">application/json</stringProp>

@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
 import {
   describeSimproError,
   fetchSimproJob,
@@ -24,21 +23,6 @@ export async function GET(
       { status: 503 },
     );
   }
-
-  /**
-   * Proves whether the request reached this handler at all, and whether Simpro
-   * was actually contacted — the distinction that separates "our gate refused
-   * it" from "Simpro refused it". Booleans only.
-   */
-  const store = await headers();
-  console.log("[simpro] job lookup", {
-    route: "/api/simpro/job/[id]",
-    jobId: id,
-    hasClientPrincipal: Boolean(store.get("x-ms-client-principal")),
-    hasPrincipalName: Boolean(store.get("x-ms-client-principal-name")),
-    hasApiKey: Boolean(store.get("x-api-key") ?? store.get("authorization")),
-    simproRequestAttempted: true,
-  });
 
   try {
     return NextResponse.json({ data: await fetchSimproJob(id) });

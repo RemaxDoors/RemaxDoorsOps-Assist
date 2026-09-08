@@ -1,7 +1,6 @@
 import "server-only";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { hasValidApiKey } from "@/lib/auth/apiKey";
 import { identityTrust, onAppService } from "@/lib/auth/platform";
 
 /**
@@ -98,30 +97,6 @@ export async function getSession(): Promise<Session | null> {
     email,
   };
 }
-
-/**
- * Identity for an API request, or null.
- *
- * Route handlers must use this rather than requireSession(). requireSession()
- * calls redirect(), which in a route handler becomes a 307 to the sign-in page
- * — so an API caller got HTML-ish redirect instead of JSON, and a browser
- * fetch followed it cross-origin and failed with an opaque "Failed to fetch".
- * Measured: POST /api/ncr with a valid API key answered 303 to
- * /.auth/login/aad, which is why the key could read but never write.
- *
- * A valid API key is an identity in its own right — machine callers (M1 forms,
- * Power BI) have no user behind them — but it is deliberately not a person, so
- * anything recorded against it is attributable to "API" rather than to whoever
- * last held the key.
- */
-export async function apiActor(headers_: Headers): Promise<Session | null> {
-  const session = await getSession();
-  if (session) return session;
-  if (hasValidApiKey(headers_)) return API_ACTOR;
-  return null;
-}
-
-const API_ACTOR: Session = { sub: "api", name: "API", email: "" };
 
 /** Use in protected pages: returns the session or sends the user to sign in. */
 export async function requireSession(returnTo = "/dashboard"): Promise<Session> {

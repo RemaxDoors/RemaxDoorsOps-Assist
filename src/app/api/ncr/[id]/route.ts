@@ -4,7 +4,7 @@ import {
   planCorrectiveAction,
   updateCorrectiveAction,
 } from "@/lib/repositories/ncr.repo";
-import { apiActor } from "@/lib/auth/session";
+import { getSession } from "@/lib/auth/session";
 import { isDatabaseUnreachable } from "@/lib/db/errors";
 import { ncrUpdateSchema } from "@/types/ncr";
 
@@ -32,14 +32,11 @@ export async function GET(_request: Request, { params }: Context) {
  * overwrite a newer change. Better to say it did not save.
  */
 export async function PATCH(request: Request, { params }: Context) {
-  // See the note in /api/ncr: requireSession() would redirect, which an API
+  // See the note in /api/ncr: requireSession() would redirect, which a fetch
   // caller cannot read.
-  const actor = await apiActor(request.headers);
+  const actor = await getSession();
   if (!actor) {
-    return NextResponse.json(
-      { error: "Unauthorized. Send a valid X-API-Key header, or sign in." },
-      { status: 401 },
-    );
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
   const { id } = await params;

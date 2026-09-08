@@ -75,13 +75,14 @@ test.describe("NCR", () => {
 });
 
 test.describe("API contract", () => {
-  const key = process.env.API_KEY;
-  const headers = key ? { "X-API-Key": key } : undefined;
 
   test("NCR list returns resolved classifications", async ({ request }) => {
-    test.skip(!headers && process.env.AUTH_DEV_BYPASS !== "true", "no API key");
+    test.skip(
+      process.env.AUTH_DEV_BYPASS !== "true",
+      "needs a session; App Service Authentication cannot be scripted",
+    );
 
-    const response = await request.get("/api/ncr?limit=3", { headers });
+    const response = await request.get("/api/ncr?limit=3");
     expect(response.status()).toBe(200);
 
     const { data } = await response.json();
@@ -94,19 +95,25 @@ test.describe("API contract", () => {
   });
 
   test("next id is a number and is not consumed by reading it", async ({ request }) => {
-    test.skip(!headers && process.env.AUTH_DEV_BYPASS !== "true", "no API key");
+    test.skip(
+      process.env.AUTH_DEV_BYPASS !== "true",
+      "needs a session; App Service Authentication cannot be scripted",
+    );
 
-    const first = await (await request.get("/api/ncr/next-id", { headers })).json();
-    const second = await (await request.get("/api/ncr/next-id", { headers })).json();
+    const first = await (await request.get("/api/ncr/next-id")).json();
+    const second = await (await request.get("/api/ncr/next-id")).json();
 
     expect(first.data.nextId).toMatch(/^\d+$/);
     expect(second.data.nextId).toBe(first.data.nextId);
   });
 
   test("invalid filter is rejected, not ignored", async ({ request }) => {
-    test.skip(!headers && process.env.AUTH_DEV_BYPASS !== "true", "no API key");
+    test.skip(
+      process.env.AUTH_DEV_BYPASS !== "true",
+      "needs a session; App Service Authentication cannot be scripted",
+    );
 
-    const response = await request.get("/api/ncr?limit=99999", { headers });
+    const response = await request.get("/api/ncr?limit=99999");
     expect(response.status()).toBe(400);
   });
 });

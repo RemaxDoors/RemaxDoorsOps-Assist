@@ -11,13 +11,11 @@ import { test, expect } from "@playwright/test";
  * against the deployed instance without an interactive sign-in.
  */
 test.describe("system check API", () => {
-  const key = process.env.API_KEY;
 
   test("reports every check, and its status code carries the verdict", async ({
     request,
   }) => {
     const response = await request.get("/api/system", {
-      headers: key ? { "X-API-Key": key } : {},
     });
 
     // 200 when nothing failed, 503 when something did — both are valid
@@ -43,7 +41,6 @@ test.describe("system check API", () => {
 
   test("nothing required is failing", async ({ request }) => {
     const response = await request.get("/api/system", {
-      headers: key ? { "X-API-Key": key } : {},
     });
     const body = await response.json();
 
@@ -57,11 +54,10 @@ test.describe("system check API", () => {
 
   test("no secret is returned, only whether it is set", async ({ request }) => {
     const response = await request.get("/api/system", {
-      headers: key ? { "X-API-Key": key } : {},
     });
     const text = await response.text();
 
-    for (const name of ["DB_PASSWORD", "SIMPRO_API_TOKEN", "API_KEY"] as const) {
+    for (const name of ["DB_PASSWORD", "SIMPRO_API_TOKEN"] as const) {
       const value = process.env[name];
       if (value) expect(text).not.toContain(value);
     }

@@ -12,8 +12,8 @@ export async function GET(request: Request) {
     version: "1.0",
     baseUrl: base,
     authentication: {
-      header: "X-API-Key",
-      note: "Or sign in with Microsoft and use the session cookie from a browser.",
+      type: "Microsoft Entra, via Azure App Service Authentication",
+      note: "Sign in through the app; requests from that browser session are authenticated. There is no API key.",
     },
     endpoints: apiEndpoints.map((endpoint) => ({
       method: endpoint.method,

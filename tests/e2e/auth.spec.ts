@@ -1,16 +1,20 @@
 import { test, expect } from "@playwright/test";
 
 /**
- * The gate. These are the tests that matter in Azure, where AUTH_DEV_BYPASS is
- * off: they prove nothing is reachable without a session or an API key.
+ * The gate. These matter in Azure, where AUTH_DEV_BYPASS is off: they prove
+ * nothing is reachable without a Microsoft Entra session.
  *
  * Sign-in belongs to App Service Authentication, so the app never renders a
- * Microsoft login itself — it redirects to /.auth/login/aad, which only exists
- * when App Service is in front. These assert on that redirect rather than
- * following it, so they pass against a local build as well as against Azure.
+ * login itself — it redirects to /.auth/login/aad, which only exists when App
+ * Service is in front. These assert on that redirect rather than following it,
+ * so they pass against a local build as well as against Azure.
  *
- * Skipped automatically when the dev bypass is on, since it deliberately opens
- * everything — a pass there would mean nothing.
+ * There is deliberately no API-key test any more: the key was removed, and an
+ * assertion that a header we no longer read is rejected would pass for the
+ * wrong reason.
+ *
+ * Skipped when the dev bypass is on, since it opens everything by design and a
+ * pass there would mean nothing.
  */
 const bypassOn = process.env.AUTH_DEV_BYPASS === "true";
 
@@ -41,39 +45,37 @@ test.describe("authentication", () => {
       );
     });
 
-    test("API rejects a request with no key", async ({ request }) => {
-      const response = await request.get("/api/ncr?limit=1");
+    test("the requested page is preserved through sign-in", async ({ request }) => {
+      const response = await request.get("/ncr/new", { maxRedirects: 0 });
+      expect(response.headers().location).toContain(
+        `post_login_redirect_uri=${encodeURIComponent("/ncr/new")}`,
+      );
+    });
+
+    test("API refuses an unauthenticated request in JSON", async ({ request }) => {
+      const response = await request.get("/api/ncr?limit=1", { maxRedirects: 0 });
+
       expect(response.status()).toBe(401);
+      // Never a redirect: a browser fetch would follow it cross-origin to a
+      // login page and fail opaquely with no status to act on.
+      expect(response.headers().location).toBeUndefined();
+      expect(response.headers()["content-type"]).toContain("application/json");
+      expect(await response.json()).toHaveProperty("error");
     });
 
-    test("API rejects a wrong key", async ({ request }) => {
+    test("an API key is not a way in", async ({ request }) => {
+      // The header is no longer read at all; this guards against it quietly
+      // coming back.
       const response = await request.get("/api/ncr?limit=1", {
-        headers: { "X-API-Key": "definitely-not-the-key" },
-      });
-      expect(response.status()).toBe(401);
-    });
-
-    test("API accepts the configured key", async ({ request }) => {
-      const key = process.env.API_KEY;
-      test.skip(!key, "API_KEY not set in this environment");
-
-      const response = await request.get("/api/ncr?limit=1", {
-        headers: { "X-API-Key": key! },
-      });
-      expect(response.status()).toBe(200);
-      expect(await response.json()).toHaveProperty("data");
-    });
-
-    test("an API key does not open the UI", async ({ request }) => {
-      const key = process.env.API_KEY;
-      test.skip(!key, "API_KEY not set in this environment");
-
-      const response = await request.get("/ncr", {
-        headers: { "X-API-Key": key! },
+        headers: { "X-API-Key": "anything-at-all" },
         maxRedirects: 0,
       });
-      expect(response.status()).toBe(307);
-      expect(response.headers().location).toContain("/.auth/login/aad");
+      expect(response.status()).toBe(401);
+    });
+
+    test("the health probe stays public", async ({ request }) => {
+      const response = await request.get("/api/health");
+      expect(response.status()).toBe(200);
     });
   });
 });

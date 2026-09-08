@@ -1,35 +1,34 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { hasValidApiKey } from "@/lib/auth/apiKey";
 import { identityTrust, onAppService } from "@/lib/auth/platform";
 
 /**
- * Gate for pages and API routes.
+ * A backstop, not an authentication system.
  *
- * Sign-in itself belongs to App Service Authentication, which runs before this
- * app is reached and attaches the signed-in user as headers. This only decides
- * what to do when those headers are absent:
+ * App Service Authentication is the boundary: it signs the user in before the
+ * request reaches this app and attaches the result as headers. With "Require
+ * authentication" it also refuses anonymous requests at the edge, so in normal
+ * operation nothing here ever fires.
  *
- *   - a person is sent to App Service's own sign-in endpoint;
- *   - a programmatic caller (M1, Power BI, scripts) may present an API key.
+ * It is kept for the case where that stops being true. Easy Auth is one toggle
+ * in a portal blade; if it is disabled or misconfigured, requests arrive with
+ * no identity and this app would otherwise serve M1 quality data to anyone who
+ * has the URL. Refusing costs one header read per request and turns a silent
+ * exposure into a visible failure.
  *
- * App Service must be configured to *allow* unauthenticated requests through.
- * Setting it to "require authentication" would have the platform reject
- * everything at the edge, which also blocks the health probe and every API-key
- * caller — neither of which can complete an interactive sign-in.
+ * There is no login logic here, no session, no API key, and no token. The only
+ * decision is: identity present, or not.
  */
 
 /** Set by App Service on every authenticated request. */
 const PRINCIPAL_NAME = "x-ms-client-principal-name";
 const PRINCIPAL_ID = "x-ms-client-principal-id";
-/** The base64 claims blob; present whenever the platform authenticated. */
-const PRINCIPAL = "x-ms-client-principal";
 
 /**
- * Open endpoints: the health probe used by monitoring, and the identity
- * diagnostic — which has to answer for an anonymous request to be any use,
- * and returns only booleans.
+ * The health probe stays open so monitoring can reach it. Exclude the same
+ * path in App Service (Authentication → excluded paths) or the platform will
+ * refuse it before this is consulted.
  */
-const PUBLIC_PREFIXES = ["/api/health", "/api/whoami"];
+const PUBLIC_PREFIXES = ["/api/health"];
 
 function isPublic(pathname: string) {
   return PUBLIC_PREFIXES.some(
@@ -38,8 +37,8 @@ function isPublic(pathname: string) {
 }
 
 function isSignedIn(request: NextRequest) {
-  // Same rule as getSession(): the headers are only believable while App
-  // Service Authentication is enabled to strip client-supplied ones.
+  // Headers are only believable while App Service Authentication is enabled to
+  // strip client-supplied ones — see lib/auth/platform.ts.
   if (onAppService() && !identityTrust().trusted) return false;
 
   return Boolean(
@@ -52,45 +51,23 @@ export function middleware(request: NextRequest) {
 
   if (isPublic(pathname)) return NextResponse.next();
 
-  const isApi = pathname.startsWith("/api/");
-
-  // An API key is accepted on API routes only — never as a way into the UI.
-  if (isApi && hasValidApiKey(request.headers)) return NextResponse.next();
-
+  // `next dev` has no App Service in front of it, so there are no identity
+  // headers and nobody could sign in at all. Ignored in production builds.
   if (process.env.AUTH_DEV_BYPASS === "true") return NextResponse.next();
+
   if (isSignedIn(request)) return NextResponse.next();
 
-  if (isApi) {
-    /**
-     * The booleans that decided this, returned with the refusal.
-     *
-     * Reading them from a log stream means correlating a timestamp with a
-     * click; putting them in the body means whoever hit the error can see why
-     * in the same breath. All derived, none of them a value: no header
-     * contents, no key material, nothing that helps an attacker who could not
-     * already send these headers.
-     */
+  // An API caller gets JSON it can read. Redirecting would send a browser
+  // fetch cross-origin to a login page, where CORS makes it an opaque
+  // "Failed to fetch" with no status and nothing to act on.
+  if (pathname.startsWith("/api/")) {
     return NextResponse.json(
-      {
-        error: "Unauthorized. Send a valid X-API-Key header, or sign in.",
-        diagnostics: {
-          path: pathname,
-          hasClientPrincipal: Boolean(request.headers.get(PRINCIPAL)),
-          hasPrincipalName: Boolean(request.headers.get(PRINCIPAL_NAME)),
-          hasPrincipalId: Boolean(request.headers.get(PRINCIPAL_ID)),
-          hasApiKey: Boolean(
-            request.headers.get("x-api-key") ?? request.headers.get("authorization"),
-          ),
-          apiKeyValid: hasValidApiKey(request.headers),
-          apiKeyConfigured: Boolean(process.env.API_KEY),
-          identityTrusted: onAppService() ? identityTrust().trusted : null,
-          onAppService: onAppService(),
-        },
-      },
+      { error: "Not signed in." },
       { status: 401 },
     );
   }
 
+  // A person gets sent to App Service's own sign-in, which returns them here.
   const returnTo = `${pathname}${search}`;
   return NextResponse.redirect(
     new URL(

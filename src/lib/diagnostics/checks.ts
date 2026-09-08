@@ -74,7 +74,6 @@ function settingChecks(): Check[] {
   ];
 
   const optional: Array<[string, string, string]> = [
-    ["API_KEY", "Programmatic API access", "M1 forms and Power BI cannot call the API"],
     ["SIMPRO_BASE_URL", "Simpro host", "Job lookup and tasks are unavailable"],
     ["SIMPRO_API_TOKEN", "Simpro token", "Job lookup and tasks are unavailable"],
     ["ATTACHMENT_DIR", "Attachment location", "Photos cannot be saved"],

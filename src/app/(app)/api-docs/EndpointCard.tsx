@@ -22,13 +22,12 @@ export function EndpointCard({
     endpoint.method === "POST"
       ? [
           `curl -X POST ${baseUrl}/api/ncr \\`,
-          `  -H "X-API-Key: $API_KEY" \\`,
           `  -F "categoryId=FLTY" \\`,
           `  -F "reportedBy=DW" \\`,
           `  -F "description=Describe the non-conformance here." \\`,
           `  -F "attachments=@photo.jpg"`,
         ].join("\n")
-      : `curl -H "X-API-Key: $API_KEY" ${baseUrl}${endpoint.sample}`;
+      : `curl ${baseUrl}${endpoint.sample}`;
 
   async function tryIt() {
     setRunning(true);

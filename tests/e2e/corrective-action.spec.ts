@@ -43,14 +43,15 @@ test.describe("corrective action", () => {
 });
 
 test.describe("corrective action API", () => {
-  const key = process.env.API_KEY;
   const headers = {
     "Content-Type": "application/json",
-    ...(key ? { "X-API-Key": key } : {}),
   };
 
   test("refuses to close without a corrective action", async ({ request }) => {
-    test.skip(!key && process.env.AUTH_DEV_BYPASS !== "true", "no API key");
+    test.skip(
+      process.env.AUTH_DEV_BYPASS !== "true",
+      "needs a session; App Service Authentication cannot be scripted",
+    );
 
     const list = await (await request.get("/api/ncr?limit=1", { headers })).json();
     test.skip(!list.data?.length, "no NCRs to test against");
@@ -66,7 +67,10 @@ test.describe("corrective action API", () => {
   });
 
   test("unknown NCR returns 404, not a silent success", async ({ request }) => {
-    test.skip(!key && process.env.AUTH_DEV_BYPASS !== "true", "no API key");
+    test.skip(
+      process.env.AUTH_DEV_BYPASS !== "true",
+      "needs a session; App Service Authentication cannot be scripted",
+    );
 
     const response = await request.patch("/api/ncr/99999999", {
       headers,
