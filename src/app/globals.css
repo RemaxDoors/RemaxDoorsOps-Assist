@@ -30,6 +30,101 @@
   --font-sans: var(--font-montserrat), Helvetica, Arial, sans-serif;
 }
 
+/* ---------------------------------------------------------------------------
+   Dark theme.
+
+   Only the tokens are redefined — every component already reads them, so
+   nothing else needs a dark variant. The brand red is the one colour that
+   does not simply invert: #EA0029 on near-black fails contrast for text, so
+   the dark palette lifts it for foreground use and keeps the true red for
+   fills, where it sits against white.
+
+   Three states, in this order:
+     :root                                  light, the default
+     prefers-color-scheme + :not([light])   follows the operating system
+     [data-theme="dark"]                    an explicit choice, which wins
+--------------------------------------------------------------------------- */
+@layer base {
+  :root[data-theme="dark"],
+  :root:not([data-theme="light"]) {
+    color-scheme: light;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --color-brand-red: #ff4d6a;
+    --color-brand-red-dark: #ff7188;
+    --color-brand-red-soft: #3a1119;
+
+    --color-ink: #f5f5f5;
+    --color-ink-body: #b8b8b8;
+    --color-ink-muted: #8d8d8d;
+
+    --color-line: #2e2e2e;
+    --color-canvas: #171717;
+    --color-surface: #1f1f1f;
+    --color-band: #262626;
+
+    --color-ok: #4cbf87;
+    --color-ok-soft: #10291e;
+    --color-warn: #d9a441;
+    --color-warn-soft: #2a2010;
+    --color-danger: #ff6b81;
+    --color-danger-soft: #3a1119;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-brand-red: #ff4d6a;
+  --color-brand-red-dark: #ff7188;
+  --color-brand-red-soft: #3a1119;
+
+  --color-ink: #f5f5f5;
+  --color-ink-body: #b8b8b8;
+  --color-ink-muted: #8d8d8d;
+
+  --color-line: #2e2e2e;
+  --color-canvas: #171717;
+  --color-surface: #1f1f1f;
+  --color-band: #262626;
+
+  --color-ok: #4cbf87;
+  --color-ok-soft: #10291e;
+  --color-warn: #d9a441;
+  --color-warn-soft: #2a2010;
+  --color-danger: #ff6b81;
+  --color-danger-soft: #3a1119;
+}
+
+/*
+  The brandmark is a black wordmark with a red chevron, so it vanishes on a
+  dark ground. Inverting it would turn the red cyan, so it sits on a small
+  light plate instead — the brand colours stay exactly as drawn.
+*/
+:root[data-theme="dark"] .brand-plate,
+:root:not([data-theme="light"]) .brand-plate {
+  background: #ffffff;
+  border-radius: 4px;
+  padding: 8px 10px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .brand-plate {
+    background: none;
+    padding: 0;
+  }
+}
+
+:root[data-theme="light"] .brand-plate {
+  background: none;
+  padding: 0;
+}
+
 /* No height:100% here — the app shell already uses min-h-screen, and pinning
    the height stops bottom padding from creating real scroll room, which lets
    the fixed cookie banner sit on top of buttons. */

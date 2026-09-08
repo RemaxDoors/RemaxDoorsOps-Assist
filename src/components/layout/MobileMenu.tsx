@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { navItems } from "@/config/nav";
 import { Button } from "@/components/ui/Button";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { cn } from "@/lib/cn";
 
 /** Hamburger nav for small screens: sections plus the page-level actions. */
@@ -112,6 +113,10 @@ export function MobileMenu() {
               <Link href="/ncr/new" className="block">
                 <Button className="w-full">Add NCR</Button>
               </Link>
+              <div className="flex items-center justify-between gap-3 py-1">
+                <span className="text-[13px] text-ink-body">Theme</span>
+                <ThemeToggle />
+              </div>
               <Link href="/.auth/logout" className="block">
                 <Button variant="ghost" className="w-full">
                   Sign out

@@ -12,12 +12,19 @@ export function Sidebar() {
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-line bg-surface md:flex">
-      <div className="px-5 py-5">
-        <Logo width={140} />
+      {/* The logo is where people expect "home" to be, so it is the link. */}
+      <Link
+        href="/dashboard"
+        aria-label="Operation Help — go to the dashboard"
+        className="mx-5 my-5 block transition-opacity hover:opacity-80"
+      >
+        <span className="brand-plate block">
+          <Logo width={140} />
+        </span>
         <p className="mt-2 text-[10px] font-bold tracking-[0.18em] text-ink-muted uppercase">
           Operation Help
         </p>
-      </div>
+      </Link>
       <div className="px-3 pb-2">
         <Link href="/ncr/new" className="block">
           <Button className="w-full">Add NCR</Button>
