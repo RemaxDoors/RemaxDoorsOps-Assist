@@ -86,12 +86,12 @@ test.describe("authentication", () => {
      * Asserted so the exemption is visible and deliberate rather than an
      * accident someone tidies away later.
      */
-    test("the Simpro job lookup is not gated by the app", async ({ request }) => {
-      const response = await request.get("/api/simpro/job/605787", {
-        maxRedirects: 0,
-      });
-      expect(response.status()).not.toBe(401);
-      expect(response.headers().location).toBeUndefined();
+    test("the wizard's job lookups are not gated by the app", async ({ request }) => {
+      for (const path of ["/api/simpro/job/605787", "/api/m1/jobs?q=1"]) {
+        const response = await request.get(path, { maxRedirects: 0 });
+        expect(response.status(), `${path} should not be refused`).not.toBe(401);
+        expect(response.headers().location).toBeUndefined();
+      }
     });
 
     /** And the exemption is that one path, not Simpro generally. */

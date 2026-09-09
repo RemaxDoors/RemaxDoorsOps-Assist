@@ -45,7 +45,15 @@ const PRINCIPAL_ID = "x-ms-client-principal-id";
  * Exclude the same paths in App Service (Authentication → excluded paths) if
  * the health probe must keep working once that switch is made.
  */
-const PUBLIC_PREFIXES = ["/api/health", "/api/simpro/job"];
+const PUBLIC_PREFIXES = [
+  "/api/health",
+  // The Add NCR wizard's two job lookups. Both are read-only, and both were
+  // gated here as well as at the platform. See the note above: this only has
+  // an effect once the same paths are excluded in App Service, because the
+  // platform answers first.
+  "/api/simpro/job",
+  "/api/m1/jobs",
+];
 
 function isPublic(pathname: string) {
   return PUBLIC_PREFIXES.some(
