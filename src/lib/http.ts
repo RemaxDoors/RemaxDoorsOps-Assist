@@ -1,21 +1,24 @@
 /**
  * Fetch helpers for client components.
  *
- * Two jobs. The first is to say what went wrong: `fetch` rejects with a bare
- * TypeError — "Failed to fetch" — both when the network is down and when the
- * platform answers with a cross-origin redirect, so the browser's own text
+ * One job: say what went wrong. `fetch` rejects with a bare TypeError —
+ * "Failed to fetch" — both when the network is down and when the platform
+ * answers with a cross-origin redirect, so the browser's own text
  * distinguishes nothing.
  *
- * The second is to recover a lapsed sign-in. App Service sessions expire
- * (measured at roughly 75 minutes), and the two request kinds then diverge:
- * a page navigation is redirected to /.auth/login/aad, completes SSO silently
- * because Microsoft still has the user, and lands back looking fine — while a
- * background fetch cannot follow a cross-origin redirect and simply fails.
- * The result was a wizard that said "Not signed in" to somebody who had signed
- * in minutes earlier and whose next page load would have worked.
+ * This deliberately does NOT try to re-establish a sign-in. It did briefly,
+ * by calling window.location.assign() on a 401 to send the browser through a
+ * silent round trip. That started a navigation the browser then took its time
+ * completing, and while it was pending every subsequent fetch on the page
+ * failed with "Failed to fetch" — including ones that would have succeeded.
+ * A page that looked fine became permanently unable to load anything, and
+ * reloading re-triggered it. Measured on the deployed app: /api/health
+ * returned 200 on a fresh tab and threw on a tab where the redirect had
+ * fired.
  *
- * So a 401 now sends the browser through that same silent round trip instead
- * of reporting it. Expiry becomes a reload rather than an error.
+ * Reporting a lapsed sign-in and letting the person reload is worse UX and
+ * strictly better behaviour. Keeping the session alive is the real fix, and
+ * belongs somewhere that cannot break the page when it misfires.
  */
 
 export class RequestError extends Error {
@@ -34,59 +37,17 @@ const UNREACHABLE =
   "Could not reach the server. Check your connection and try again.";
 
 /**
- * Sends the browser to App Service's sign-in, returning to the current page.
+ * Clears the stamp the removed auto-navigation left behind.
  *
- * Guarded twice. `reauthenticating` stops several parallel calls each starting
- * a navigation — the NCR wizard fires a job lookup and a parts lookup together,
- * and two redirects race. The sessionStorage stamp stops a redirect loop: if
- * coming back from sign-in still yields a 401, something is wrong that another
- * round trip will not fix, so the message is shown instead.
+ * A browser that ran the previous build still holds it in sessionStorage.
+ * Nothing reads it any more, so this only stops it lingering for the life of
+ * the tab; it is not load-bearing.
  */
-let reauthenticating = false;
-const ATTEMPT_KEY = "ops_reauth_attempt";
-const ATTEMPT_WINDOW_MS = 30_000;
-
-function recentlyAttempted(): boolean {
+function clearStaleReauthStamp() {
   try {
-    const last = Number(sessionStorage.getItem(ATTEMPT_KEY) ?? 0);
-    return Date.now() - last < ATTEMPT_WINDOW_MS;
+    sessionStorage.removeItem("ops_reauth_attempt");
   } catch {
-    // Private windows can throw on access; treat as "no record" and allow one
-    // attempt rather than blocking recovery entirely.
-    return false;
-  }
-}
-
-function markAttempt() {
-  try {
-    sessionStorage.setItem(ATTEMPT_KEY, String(Date.now()));
-  } catch {
-    // Nothing to do — the in-memory guard still prevents a redirect storm
-    // within this page load.
-  }
-}
-
-/** True when the browser is being sent to sign in, so callers can stay quiet. */
-function reauthenticate(): boolean {
-  if (typeof window === "undefined") return false;
-  if (reauthenticating || recentlyAttempted()) return false;
-
-  reauthenticating = true;
-  markAttempt();
-
-  const returnTo = window.location.pathname + window.location.search;
-  window.location.assign(
-    `/.auth/login/aad?post_login_redirect_uri=${encodeURIComponent(returnTo)}`,
-  );
-  return true;
-}
-
-/** Cleared once a call succeeds, so a later expiry can recover again. */
-function clearAttempt() {
-  try {
-    sessionStorage.removeItem(ATTEMPT_KEY);
-  } catch {
-    // Ignored: the stamp expires on its own after ATTEMPT_WINDOW_MS.
+    // Private windows can refuse storage. Nothing depends on this.
   }
 }
 
@@ -112,22 +73,7 @@ async function readError(response: Response): Promise<string> {
   return described ?? `The server returned an error (${response.status}).`;
 }
 
-/**
- * Whether a lapsed sign-in should be recovered by navigating, or reported.
- *
- * Reads recover: nothing is lost by replacing the page, and the user gets
- * their data instead of an error. Writes report: the person has typed an NCR
- * and attached photos, and navigating away to fix a session would throw that
- * work away to save them a click. Losing the report is worse than losing the
- * session.
- */
-type RequestOptions = { recoverSignIn: boolean };
-
-async function request<T>(
-  url: string,
-  init?: RequestInit,
-  { recoverSignIn }: RequestOptions = { recoverSignIn: true },
-): Promise<T> {
+async function request<T>(url: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
     response = await fetch(url, init);
@@ -138,50 +84,33 @@ async function request<T>(
   }
 
   /**
-   * A lapsed sign-in, in its two shapes: our own 401, or a redirect the page
-   * cannot read because it points at the identity provider. Both are
-   * recoverable, so recover rather than report.
-   *
-   * When the navigation starts, this promise is left unresolved on purpose —
-   * the page is being replaced, and settling it would flash an error at
-   * somebody who is already on their way to being signed back in.
+   * A redirect the page cannot read points at the identity provider, so it
+   * means the same thing as a 401. Reported, not acted on — see the note at
+   * the top of this file.
    */
-  const signedOut =
-    response.status === 401 ||
-    response.type === "opaqueredirect" ||
-    response.redirected;
-
-  if (signedOut && recoverSignIn && reauthenticate()) {
-    return new Promise<T>(() => {});
+  if (response.type === "opaqueredirect" || response.redirected) {
+    throw new RequestError(SIGNED_OUT, response.status);
   }
 
   if (!response.ok) {
     throw new RequestError(await readError(response), response.status);
   }
 
-  // The call worked, so any earlier expiry is behind us and the next one
-  // should be allowed to recover in turn.
-  clearAttempt();
+  clearStaleReauthStamp();
 
   return (await response.json()) as T;
 }
 
-/** Reads recover a lapsed sign-in silently. */
 export function getJson<T>(url: string): Promise<T> {
   return request<T>(url);
 }
 
-/** Writes report it instead, so nothing typed is thrown away. */
 export function postJson<T>(url: string, body: unknown): Promise<T> {
-  return request<T>(
-    url,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    },
-    { recoverSignIn: false },
-  );
+  return request<T>(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 /** The message to show for any error thrown by the helpers above. */
