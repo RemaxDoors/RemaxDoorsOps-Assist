@@ -36,6 +36,25 @@ export async function GET() {
      * arrived" — two faults with completely different fixes.
      */
     sessionCookieSent: cookie.includes("AppServiceAuthSession"),
+    /**
+     * Names and sizes only, never values.
+     *
+     * Every unauthenticated request App Service bounces to the login page is
+     * answered with a fresh Nonce cookie. A page that pulls sub-resources the
+     * platform refuses — the manifest and the icons are requested without
+     * credentials, so it always refuses those — collects one per load. They
+     * accumulate, the Cookie header grows, and past a limit the session cookie
+     * stops arriving intact. Counting them is the only way to see that happen.
+     */
+    cookies: {
+      count: cookie ? cookie.split(";").filter((c) => c.trim()).length : 0,
+      headerBytes: cookie.length,
+      names: cookie
+        .split(";")
+        .map((c) => c.split("=")[0]?.trim())
+        .filter((n): n is string => Boolean(n))
+        .slice(0, 60),
+    },
     /** What the app made of it. Null means the app sees an anonymous caller. */
     session: session ? { name: session.name, email: session.email } : null,
     platform: {
