@@ -131,7 +131,30 @@ const NCR_OPTIONAL_COLUMNS = [
   "uqarReportedBy",
   "uqarNumAddCost",
   "uqarAddCostDetail3",
+  "uqarNcrResponseText",
+  "uqarSignedOff",
+  "uqarSignedOffBy",
+  "uqarSignedOffDate",
 ] as const;
+
+/**
+ * Which of the later NCR fields this M1 actually has.
+ *
+ * Writes to a missing column are skipped rather than failing, which is right
+ * for the database and wrong for the person: they would tick "signed off",
+ * save successfully, and watch it come back unticked with nothing to explain
+ * why. The screen asks first so it can say so instead.
+ */
+export async function ncrOptionalFields(): Promise<{
+  response: boolean;
+  signOff: boolean;
+}> {
+  const [response, signOff] = await Promise.all([
+    columnExists("ncr", "uqarNcrResponseText"),
+    columnExists("ncr", "uqarSignedOff"),
+  ]);
+  return { response, signOff };
+}
 
 async function ncrColumns(): Promise<string[]> {
   const present = await Promise.all(
@@ -174,6 +197,15 @@ function toNcr(row: Row, maps: Awaited<ReturnType<typeof lookups>>): Ncr {
     additionalCost:
       row.uqarNumAddCost == null ? null : Number(row.uqarNumAddCost),
     additionalCostDetail: text(row.uqarAddCostDetail3),
+    response: text(row.uqarNcrResponseText),
+    /**
+     * Absent column and unticked box both read as false. They are different
+     * things, but not to anyone looking at this screen: neither is a sign-off,
+     * and the System page is where "is the column installed" is answered.
+     */
+    signedOff: Boolean(row.uqarSignedOff),
+    signedOffBy: text(row.uqarSignedOffBy),
+    signedOffDate: iso(row.uqarSignedOffDate),
   };
 }
 
@@ -656,7 +688,7 @@ export async function planCorrectiveAction(
   const existing = await getNcr(ncrId);
   if (!existing) return null;
 
-  const values = correctiveActionValues(existing, input);
+  const values = await correctiveActionValues(existing, input);
   const current = await readRows<Row>("ncr", {
     columns: Object.keys(values).filter((c) => c !== "qarCorrectiveActionRTF"),
     where: [{ column: "qarNonConformanceID", op: "eq", value: ncrId }],
@@ -681,10 +713,10 @@ export async function planCorrectiveAction(
 }
 
 /** Shared by the dry run and the write, so the two cannot disagree. */
-function correctiveActionValues(
+async function correctiveActionValues(
   existing: Ncr,
   input: NcrUpdateInput,
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   const values: Record<string, unknown> = {
     qarCorrectiveActionText: input.correctiveAction,
     qarCorrectiveActionRTF: input.correctiveAction.trim()
@@ -707,6 +739,42 @@ function correctiveActionValues(
     values.qarCorrectiveActionDate = null;
   }
 
+  /**
+   * The response and sign-off, each written only where M1 has the column.
+   * Naming one that has not been added yet would make SQL Server reject the
+   * whole statement, taking the corrective action down with it.
+   */
+  if (
+    input.response !== undefined &&
+    (await columnExists("ncr", "uqarNcrResponseText"))
+  ) {
+    values.uqarNcrResponseText = input.response;
+  }
+
+  if (input.signedOff !== undefined && (await columnExists("ncr", "uqarSignedOff"))) {
+    values.uqarSignedOff = input.signedOff;
+
+    if (await columnExists("ncr", "uqarSignedOffBy")) {
+      // qarCreatedBy is nvarchar(20) and holds employee ids; this matches it.
+      values.uqarSignedOffBy = input.signedOff
+        ? (input.signedOffBy ?? "").slice(0, 20)
+        : null;
+    }
+
+    if (await columnExists("ncr", "uqarSignedOffDate")) {
+      /**
+       * Stamped here, never accepted from the browser — the date is the whole
+       * evidentiary value of a sign-off. Kept as it was if already signed off,
+       * so correcting a typo does not re-date the approval.
+       */
+      values.uqarSignedOffDate = input.signedOff
+        ? existing.signedOffDate
+          ? new Date(existing.signedOffDate)
+          : new Date()
+        : null;
+    }
+  }
+
   return values;
 }
 
@@ -719,7 +787,7 @@ export async function updateCorrectiveAction(
   const existing = await getNcr(ncrId);
   if (!existing) return null;
 
-  const values = correctiveActionValues(existing, input);
+  const values = await correctiveActionValues(existing, input);
 
   // Captured before the write so the verification can report what changed
   // from, not only what it changed to.

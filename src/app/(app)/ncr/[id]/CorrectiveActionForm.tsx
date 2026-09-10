@@ -20,6 +20,12 @@ export function CorrectiveActionForm({
   initialText,
   initialComplete,
   initialAssignedTo,
+  initialResponse,
+  initialSignedOff,
+  initialSignedOffBy,
+  signedOffOn,
+  responseAvailable,
+  signOffAvailable,
   closedOn,
   employees,
 }: {
@@ -27,6 +33,13 @@ export function CorrectiveActionForm({
   initialText: string;
   initialComplete: boolean;
   initialAssignedTo: string;
+  initialResponse: string;
+  initialSignedOff: boolean;
+  initialSignedOffBy: string;
+  signedOffOn: string | null;
+  /** Whether M1 has the column behind each field — see m1/M1-Setup.md. */
+  responseAvailable: boolean;
+  signOffAvailable: boolean;
   closedOn: string | null;
   employees: Employee[];
 }) {
@@ -35,14 +48,33 @@ export function CorrectiveActionForm({
   const [text, setText] = useState(initialText);
   const [complete, setComplete] = useState(initialComplete);
   const [assignedTo, setAssignedTo] = useState(initialAssignedTo);
+  const [ncrResponse, setNcrResponse] = useState(initialResponse);
+  const [signedOff, setSignedOff] = useState(initialSignedOff);
+  const [signedOffBy, setSignedOffBy] = useState(initialSignedOffBy);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
 
+  /**
+   * Sign-off follows the corrective action, so it cannot be reached until one
+   * is recorded and ticked complete. Unticking complete withdraws the sign-off
+   * with it — leaving an approval attached to work that has reopened would say
+   * something untrue about the record.
+   *
+   * Derived rather than pushed into state: the tick a person made is still
+   * remembered, so re-ticking complete restores it instead of silently losing
+   * it.
+   */
+  const canSignOff = signOffAvailable && complete && text.trim().length > 0;
+  const effectiveSignedOff = signedOff && canSignOff;
+
   const dirty =
     text !== initialText ||
     complete !== initialComplete ||
-    assignedTo !== initialAssignedTo;
+    assignedTo !== initialAssignedTo ||
+    ncrResponse !== initialResponse ||
+    effectiveSignedOff !== initialSignedOff ||
+    signedOffBy !== initialSignedOffBy;
 
   async function save() {
     setSaving(true);
@@ -59,6 +91,9 @@ export function CorrectiveActionForm({
             correctiveAction: text,
             complete,
             assignedTo: assignedTo || "",
+            response: ncrResponse,
+            signedOff: effectiveSignedOff,
+            signedOffBy: effectiveSignedOff ? signedOffBy : "",
           }),
         });
       } catch {
@@ -154,6 +189,84 @@ export function CorrectiveActionForm({
             </span>
           </span>
         </label>
+
+        <div className="space-y-4 border-t border-line pt-4">
+          {/*
+            A missing column is skipped by the write rather than failing it, so
+            without this the fields would accept input, save without complaint,
+            and come back empty. Saying so is the only honest option.
+          */}
+          {!responseAvailable || !signOffAvailable ? (
+            <p className="rounded-sm border border-warn/20 bg-warn-soft px-4 py-2.5 text-[13px] text-warn">
+              {responseAvailable || signOffAvailable
+                ? "Some of the fields below are not yet set up in M1, so they cannot be saved."
+                : "Response and sign-off are not yet set up in M1, so they cannot be saved."}{" "}
+              Ask whoever manages M1 to add the columns in m1/M1-Setup.md — the
+              System page lists which are missing.
+            </p>
+          ) : null}
+
+          {responseAvailable ? (
+            <Field
+              label="NCR response / notes"
+              hint="Anything said back once the corrective action was recorded — the customer's reply, a follow-up, or a note for the next person."
+            >
+              <Textarea
+                rows={4}
+                value={ncrResponse}
+                onChange={(e) => setNcrResponse(e.target.value)}
+                placeholder="Response received, follow-up agreed, or notes for whoever picks this up next."
+              />
+            </Field>
+          ) : null}
+
+          {signOffAvailable ? (
+          <label
+            className={`flex items-start gap-3 rounded-sm border border-line p-4 ${
+              canSignOff ? "" : "opacity-60"
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={effectiveSignedOff}
+              disabled={!canSignOff}
+              onChange={(e) => setSignedOff(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-[var(--color-brand-red)]"
+            />
+            <span>
+              <span className="text-[13px] font-bold text-ink">Signed off</span>
+              <span className="mt-0.5 block text-[13px] text-ink-body">
+                {canSignOff
+                  ? "Approves the corrective action. The date is stamped by the server when this is saved."
+                  : "Available once the corrective action is written and ticked complete."}
+              </span>
+            </span>
+          </label>
+          ) : null}
+
+          {effectiveSignedOff ? (
+            <Field label="Signed off by" hint="Who is approving it">
+              <Select
+                value={signedOffBy}
+                onChange={(e) => setSignedOffBy(e.target.value)}
+                options={[
+                  { value: "", label: "Select a person..." },
+                  ...employees.map((e) => ({
+                    value: e.id,
+                    label: `${e.name} (${e.id})`,
+                  })),
+                ]}
+              />
+            </Field>
+          ) : null}
+
+          {initialSignedOff && signedOffOn ? (
+            <p className="text-[12px] text-ink-muted">
+              Signed off on {signedOffOn}. Editing the wording does not change
+              that date.
+            </p>
+          ) : null}
+        </div>
 
         {error ? (
           <p className="rounded-sm border border-danger/20 bg-danger-soft px-4 py-2.5 text-[13px] text-danger">

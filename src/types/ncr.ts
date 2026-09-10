@@ -33,6 +33,12 @@ export type Ncr = {
   reportedByName: string | null;
   additionalCost: number | null;
   additionalCostDetail: string | null;
+  /** What was said back once the corrective action was recorded. */
+  response: string | null;
+  signedOff: boolean;
+  /** M1 employee id of whoever signed it off. */
+  signedOffBy: string | null;
+  signedOffDate: string | null;
 };
 
 /** M1 stores severity free-text (nvarchar(10)); these are the offered values. */
@@ -126,6 +132,10 @@ export const ncrUpdateSchema = z
     correctiveAction: z.string().trim().max(8000),
     complete: z.coerce.boolean(),
     assignedTo: z.string().trim().max(10).optional(),
+    /** Free text recorded after the corrective action. */
+    response: z.string().trim().max(8000).optional(),
+    signedOff: z.coerce.boolean().optional(),
+    signedOffBy: z.string().trim().max(20).optional(),
   })
   .refine(
     (value) => !value.complete || value.correctiveAction.trim().length >= 10,
@@ -133,6 +143,20 @@ export const ncrUpdateSchema = z
       message: "Describe the corrective action before marking it complete",
       path: ["correctiveAction"],
     },
-  );
+  )
+  /**
+   * A sign-off is a claim that a named person approved this. Without the name
+   * it is an anonymous tick, which is worth less than no tick at all — it looks
+   * like assurance and cannot be followed up.
+   */
+  .refine((value) => !value.signedOff || Boolean(value.signedOffBy?.trim()), {
+    message: "Pick who signed it off",
+    path: ["signedOffBy"],
+  })
+  /** Signing off something that is not finished is not a meaningful record. */
+  .refine((value) => !value.signedOff || value.complete, {
+    message: "The corrective action must be complete before it can be signed off",
+    path: ["signedOff"],
+  });
 
 export type NcrUpdateInput = z.infer<typeof ncrUpdateSchema>;

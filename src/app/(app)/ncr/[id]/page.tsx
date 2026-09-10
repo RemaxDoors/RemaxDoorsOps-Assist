@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { TaskButton } from "@/app/(app)/ncr/[id]/TaskButton";
 import { CorrectiveActionForm } from "@/app/(app)/ncr/[id]/CorrectiveActionForm";
 import { isSimproConfigured, simproJobUrl } from "@/lib/simpro/client";
-import { getNcr } from "@/lib/repositories/ncr.repo";
+import { getNcr, ncrOptionalFields } from "@/lib/repositories/ncr.repo";
 import { listNcrAttachments } from "@/lib/repositories/attachment.repo";
 import { listEmployees } from "@/lib/repositories/employee.repo";
 import { daysSince, formatDate } from "@/lib/format";
@@ -39,16 +39,19 @@ export default async function NcrDetailPage({
   let attachments: NcrAttachment[] = [];
   let staff: Map<string, string>;
   let employees: Awaited<ReturnType<typeof listEmployees>> = [];
+  let optionalFields = { response: false, signOff: false };
 
   try {
-    const [record, files, people] = await Promise.all([
+    const [record, files, people, fields] = await Promise.all([
       getNcr(id),
       listNcrAttachments(id),
       listEmployees(),
+      ncrOptionalFields(),
     ]);
     ncr = record;
     attachments = files;
     employees = people;
+    optionalFields = fields;
     staff = new Map(people.map((e) => [e.id, e.name]));
   } catch (error) {
     return <DbError error={error} />;
@@ -142,6 +145,20 @@ export default async function NcrDetailPage({
               />
               <Detail label="Quantity affected" value={String(ncr.quantity)} />
               <Detail label="Reported by" value={person(ncr.reportedBy)} />
+              {/*
+                Two different people, and the difference matters on a quality
+                record: "Reported by" is the M1 employee chosen in the form,
+                while this is the account that was signed in when it was
+                entered. Shown only when M1 has uqarReportedBy and it holds
+                something, so older rows do not gain an empty field.
+              */}
+              {ncr.reportedByName ? (
+                <Detail
+                  label="Entered by"
+                  value={ncr.reportedByName}
+                  hint="Signed-in user who raised it"
+                />
+              ) : null}
               <Detail label="Assigned to" value={person(ncr.assignedTo)} />
               <Detail
                 label="Part"
@@ -186,6 +203,17 @@ export default async function NcrDetailPage({
                 label="Corrective action date"
                 value={formatDate(ncr.correctiveActionDate)}
               />
+              {ncr.signedOff ? (
+                <Detail
+                  label="Signed off"
+                  value={person(ncr.signedOffBy)}
+                  hint={
+                    ncr.signedOffDate
+                      ? formatDate(ncr.signedOffDate)
+                      : undefined
+                  }
+                />
+              ) : null}
             </dl>
 
             {/*
@@ -269,6 +297,12 @@ export default async function NcrDetailPage({
           initialText={ncr.correctiveAction ?? ""}
           initialComplete={ncr.status === "Closed"}
           initialAssignedTo={ncr.assignedTo ?? ""}
+          initialResponse={ncr.response ?? ""}
+          initialSignedOff={ncr.signedOff}
+          initialSignedOffBy={ncr.signedOffBy ?? ""}
+          signedOffOn={ncr.signedOffDate ? formatDate(ncr.signedOffDate) : null}
+          responseAvailable={optionalFields.response}
+          signOffAvailable={optionalFields.signOff}
           closedOn={
             ncr.correctiveActionDate ? formatDate(ncr.correctiveActionDate) : null
           }

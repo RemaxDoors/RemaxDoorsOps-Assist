@@ -263,6 +263,10 @@ const OPTIONAL_COLUMNS: Array<[TableKey, string, string]> = [
   ["ncr", "uqarReportedBy", "Entra display name of whoever raised it"],
   ["ncr", "uqarNumAddCost", "Extra cost"],
   ["ncr", "uqarAddCostDetail3", "What the extra cost was for"],
+  ["ncr", "uqarNcrResponseText", "NCR response / notes"],
+  ["ncr", "uqarSignedOff", "Signed off"],
+  ["ncr", "uqarSignedOffBy", "Who signed it off"],
+  ["ncr", "uqarSignedOffDate", "When it was signed off"],
 ];
 
 async function columnChecks(): Promise<Check[]> {

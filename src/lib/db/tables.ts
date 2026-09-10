@@ -69,6 +69,16 @@ export const tables = {
       /** Plain text; uqarAddCostDetail is M1's RTF twin of the same field. */
       uqarAddCostDetail3: "string",
       uqarAddCostDetail: "text",
+      /**
+       * The response and sign-off that follow a corrective action. Deliberately
+       * shaped like M1's own qarCorrectiveAction{Text,Complete,Date} trio — a
+       * flag, a date and who — so anyone reading the table finds the same
+       * pattern twice rather than two conventions.
+       */
+      uqarNcrResponseText: "text",
+      uqarSignedOff: "bit",
+      uqarSignedOffBy: "string",
+      uqarSignedOffDate: "datetime",
     },
     /**
      * Selected by default when a caller names no columns, so this list holds
@@ -99,6 +109,10 @@ export const tables = {
       "uqarReportedBy",
       "uqarNumAddCost",
       "uqarAddCostDetail3",
+      "uqarNcrResponseText",
+      "uqarSignedOff",
+      "uqarSignedOffBy",
+      "uqarSignedOffDate",
     ],
     // Opened for the Add NCR wizard. The ID itself is allocated by the
     // gateway's insertRowWithAllocatedId, not passed in by callers.
@@ -129,6 +143,10 @@ export const tables = {
       "uqarNumAddCost",
       "uqarAddCostDetail3",
       "uqarAddCostDetail",
+      "uqarNcrResponseText",
+      "uqarSignedOff",
+      "uqarSignedOffBy",
+      "uqarSignedOffDate",
     ],
   },
 
