@@ -4,6 +4,7 @@ import {
   createSimproTask,
   describeSimproError,
   isSimproConfigured,
+  SimproError,
 } from "@/lib/simpro/client";
 import {
   getNcrSimproTaskId,
@@ -92,7 +93,16 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[simpro] task creation failed:", error);
     return NextResponse.json(
-      { error: describeSimproError(error, "The task") },
+      {
+        error: describeSimproError(error, "The task"),
+        /**
+         * Simpro's own words. The friendly message deliberately says nothing
+         * about why, which is right for the shop floor and useless for fixing
+         * it — "let IT know" only helps if IT is told something. Carried as a
+         * separate field so the screen can keep the two apart.
+         */
+        detail: error instanceof SimproError ? error.message : undefined,
+      },
       { status: 502 },
     );
   }

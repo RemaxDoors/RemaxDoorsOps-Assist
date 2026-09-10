@@ -5,6 +5,8 @@ import { RefreshButton } from "@/components/ui/RefreshButton";
 import { StatCard } from "@/components/ui/StatCard";
 import { runDiagnostics, type Check, type CheckStatus } from "@/lib/diagnostics/checks";
 import { APP_NAME, BUILD_TIME, versionLabel } from "@/lib/version";
+import { IdentityCheck } from "@/components/ui/IdentityCheck";
+import { getSession } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +34,9 @@ const WORD: Record<CheckStatus, string> = {
  */
 export default async function SystemPage() {
   const result = await runDiagnostics();
+  // Read on the server, so it reports the identity that arrived with *this*
+  // page request — the half of the comparison the browser cannot see.
+  const renderedFor = (await getSession())?.name ?? null;
 
   // Preserve the order the checks were produced in; it runs cheapest first.
   const groups = result.checks.reduce<Map<string, Check[]>>((acc, check) => {
@@ -116,6 +121,8 @@ export default async function SystemPage() {
           </Card>
         ))}
       </div>
+
+      <IdentityCheck renderedFor={renderedFor} />
 
       <Card className="mt-4">
         <CardHeader

@@ -70,6 +70,14 @@ async function readError(response: Response): Promise<string> {
     if (named) return `${described ?? "Check the details"} — ${named}`;
   }
 
+  /**
+   * A server that explained itself is worth repeating verbatim. Simpro's
+   * rejections arrive this way, and without them a task failure is only ever
+   * "let IT know" with nothing to tell them.
+   */
+  const detail = typeof body?.detail === "string" ? body.detail : null;
+  if (described && detail) return `${described} (${detail})`;
+
   return described ?? `The server returned an error (${response.status}).`;
 }
 
