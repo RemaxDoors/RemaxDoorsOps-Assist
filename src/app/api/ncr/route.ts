@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createNcr, listNcrs } from "@/lib/repositories/ncr.repo";
 import { saveNcrAttachment, storeAttachmentFile } from "@/lib/repositories/attachment.repo";
 import { getSession } from "@/lib/auth/session";
-import { findEmployeeForUser } from "@/lib/repositories/employee.repo";
+import { employeeNameMap, findEmployeeForUser } from "@/lib/repositories/employee.repo";
 import { isDatabaseUnreachable } from "@/lib/db/errors";
 import { enqueueSubmission } from "@/lib/queue/submissionQueue";
 import { ncrCreateSchema, ncrFilterSchema } from "@/types/ncr";
@@ -40,13 +40,15 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   /**
-   * Who to record against. Never requireSession(): it redirects, and a
-   * redirect from an API route is unreadable to a fetch caller.
+   * Read, never required. Signing in happens once when the page is opened; a
+   * second check here refused saves from a page that was open and filled in,
+   * and cost the person their work.
+   *
+   * When there is a session it is still the better author — it says who was
+   * actually at the keyboard rather than who was picked from a dropdown — so
+   * it is preferred below wherever it exists.
    */
   const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
 
   const form = await request.formData();
 
@@ -90,17 +92,40 @@ export async function POST(request: Request) {
    * truncated and in a format nothing else in M1 uses. Prefer the M1 employee
    * id, and fall back to a name only when the signed-in user has no M1 record.
    */
-  const me = await findEmployeeForUser({
-    email: session.email,
-    name: session.name,
-  }).catch(() => null);
-  const createdBy = me?.id ?? (session.name || session.email);
+  const me = session
+    ? await findEmployeeForUser({
+        email: session.email,
+        name: session.name,
+      }).catch(() => null)
+    : null;
 
   /**
-   * Assembled here, not in the browser: the timestamp and the author are the
-   * two things a client must not be able to choose, and the author is the
-   * whole point of uqarReportedBy.
+   * Without a session, the "Reported by" chosen in the wizard is the only
+   * statement of who raised this. It is an M1 employee id picked from M1's own
+   * list, so it fits qarCreatedBy and matches the format every other row uses
+   * — but it is chosen in the browser, so the record no longer proves who
+   * typed it. That is the trade for not refusing the save.
    */
+  const createdBy = me?.id ?? session?.name ?? session?.email ?? input.reportedBy;
+
+  /**
+   * The description is assembled here, not in the browser: the timestamp is
+   * the one thing a client must not be able to choose.
+   *
+   * The author no longer has that guarantee. With a session it is still the
+   * signed-in person. Without one, the employee id the form sent is resolved
+   * to the name M1 holds against it, so the audit line reads "Reported by
+   * Damian Court" rather than "DC", falling back to the id itself — something
+   * a supervisor can look up — rather than "Unknown user".
+   */
+  const author =
+    session?.name ||
+    session?.email ||
+    (await employeeNameMap()
+      .then((names) => names.get(input.reportedBy))
+      .catch(() => null)) ||
+    input.reportedBy;
+
   const description = buildDescription({
     issue: input.description,
     job: {
@@ -111,7 +136,7 @@ export async function POST(request: Request) {
       projectManager: input.projectManager,
       m1QuoteNumber: input.m1QuoteNumber,
     },
-    author: session.name || session.email || "Unknown user",
+    author,
   });
   const warnings: string[] = [];
 
@@ -133,7 +158,7 @@ export async function POST(request: Request) {
     ncrId = await createNcr(
       { ...input, description },
       createdBy,
-      session.name || null,
+      session?.name || null,
     );
   } catch (error) {
     if (!isDatabaseUnreachable(error)) {
@@ -152,7 +177,7 @@ export async function POST(request: Request) {
 
     const queued = await enqueueSubmission({
       createdBy,
-      authorName: session.name || null,
+      authorName: session?.name || null,
       // The assembled description, not the raw entry: rebuilding it at drain
       // time would stamp the audit line with the hour M1 came back rather
       // than the hour the person actually reported the problem.

@@ -4,7 +4,6 @@ import {
   planCorrectiveAction,
   updateCorrectiveAction,
 } from "@/lib/repositories/ncr.repo";
-import { getSession } from "@/lib/auth/session";
 import { isDatabaseUnreachable } from "@/lib/db/errors";
 import { ncrUpdateSchema } from "@/types/ncr";
 
@@ -32,13 +31,12 @@ export async function GET(_request: Request, { params }: Context) {
  * overwrite a newer change. Better to say it did not save.
  */
 export async function PATCH(request: Request, { params }: Context) {
-  // See the note in /api/ncr: requireSession() would redirect, which a fetch
-  // caller cannot read.
-  const actor = await getSession();
-  if (!actor) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
-
+  /**
+   * No sign-in check. The session was read here only to refuse the request —
+   * the identity was never recorded against the change — so the check cost a
+   * person their corrective action whenever their sign-in had lapsed while
+   * they typed it, and bought nothing in return. App Service is the gate.
+   */
   const { id } = await params;
 
   let body: unknown;
