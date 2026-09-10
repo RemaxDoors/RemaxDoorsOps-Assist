@@ -29,8 +29,19 @@ jobs:
       # Must precede the typecheck: `next build` writes next-env.d.ts, which
       # supplies the ambient declarations for static asset imports (the logo).
       # Running tsc first fails on a file Next has not generated yet.
+      #
+      # The build stamps itself with the commit and the time. Both are
+      # substituted into the bundle here and cannot be recovered later — the
+      # deployed artifact has no .git directory — so a UAT report can name the
+      # exact build it came from.
       - name: Build application
-        run: npm run build
+        env:
+          NEXT_PUBLIC_BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          export NEXT_PUBLIC_BUILD_COMMIT="${NEXT_PUBLIC_BUILD_COMMIT:0:7}"
+          export NEXT_PUBLIC_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "Building $(node -p "require('./package.json').version") @ $NEXT_PUBLIC_BUILD_COMMIT"
+          npm run build
 
       - name: Typecheck
         run: npm run --if-present typecheck

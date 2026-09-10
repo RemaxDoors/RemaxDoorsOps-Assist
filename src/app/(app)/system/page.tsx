@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { RefreshButton } from "@/components/ui/RefreshButton";
 import { StatCard } from "@/components/ui/StatCard";
 import { runDiagnostics, type Check, type CheckStatus } from "@/lib/diagnostics/checks";
+import { APP_NAME, BUILD_TIME, versionLabel } from "@/lib/version";
 
 export const dynamic = "force-dynamic";
 
@@ -44,9 +45,9 @@ export default async function SystemPage() {
     <>
       <PageHeader
         title="System check"
-        description={`${result.checks.length} checks in ${result.ms}ms · ${new Date(
-          result.ranAt,
-        ).toLocaleString("en-AU")}`}
+        description={`${APP_NAME} ${versionLabel()}${
+          BUILD_TIME ? ` · built ${new Date(BUILD_TIME).toLocaleString("en-AU")}` : ""
+        } · ${result.checks.length} checks in ${result.ms}ms`}
         actions={<RefreshButton />}
       />
 

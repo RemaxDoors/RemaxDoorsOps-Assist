@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Montserrat } from "next/font/google";
 import { CookieConsent } from "@/components/layout/CookieConsent";
+import { Footer } from "@/components/layout/Footer";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
@@ -53,8 +54,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body>
-        {children}
+      {/*
+        The footer lives here rather than in AppShell so it reaches every page,
+        including the sign-in screen and anything Next renders itself. Children
+        take the remaining height, so it sits at the bottom of a short page and
+        below the content of a long one.
+      */}
+      <body className="flex min-h-screen flex-col">
+        <div className="flex flex-1 flex-col">{children}</div>
+        <Footer />
         <CookieConsent />
       </body>
     </html>

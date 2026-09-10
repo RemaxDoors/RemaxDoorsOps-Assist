@@ -19,7 +19,7 @@ export default async function LandingPage({
   const signInHref = signInUrl(returnTo);
 
   return (
-    <main className="grid min-h-screen lg:grid-cols-2">
+    <main className="grid flex-1 lg:grid-cols-2">
       {/* Brand panel */}
       <section className="relative hidden flex-col justify-between bg-canvas p-10 lg:flex">
         <Logo width={190} />
