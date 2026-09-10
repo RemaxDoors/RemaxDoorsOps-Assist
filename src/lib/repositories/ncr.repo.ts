@@ -751,6 +751,19 @@ async function correctiveActionValues(
     values.uqarNcrResponseText = input.response;
   }
 
+  /**
+   * Never NULL.
+   *
+   * These columns arrived in M1 as NOT NULL — SQL Server demands a default
+   * when a NOT NULL column is added to a table that already has rows, so the
+   * existing 592 NCRs have one. Writing NULL to clear them therefore fails the
+   * whole UPDATE, which took the corrective action down with it: an ordinary
+   * save that never touched the sign-off could not be recorded at all.
+   *
+   * So an unset sign-off is written as an empty string, and the date is simply
+   * left alone rather than cleared. The flag is what says whether this is
+   * signed off; the name and date are the record of when it last was.
+   */
   if (input.signedOff !== undefined && (await columnExists("ncr", "uqarSignedOff"))) {
     values.uqarSignedOff = input.signedOff;
 
@@ -758,20 +771,19 @@ async function correctiveActionValues(
       // qarCreatedBy is nvarchar(20) and holds employee ids; this matches it.
       values.uqarSignedOffBy = input.signedOff
         ? (input.signedOffBy ?? "").slice(0, 20)
-        : null;
+        : "";
     }
 
-    if (await columnExists("ncr", "uqarSignedOffDate")) {
-      /**
-       * Stamped here, never accepted from the browser — the date is the whole
-       * evidentiary value of a sign-off. Kept as it was if already signed off,
-       * so correcting a typo does not re-date the approval.
-       */
-      values.uqarSignedOffDate = input.signedOff
-        ? existing.signedOffDate
-          ? new Date(existing.signedOffDate)
-          : new Date()
-        : null;
+    /**
+     * Stamped here, never accepted from the browser — the date is the whole
+     * evidentiary value of a sign-off. Kept as it was if already signed off,
+     * so correcting a typo does not re-date the approval, and left untouched
+     * when withdrawing rather than being cleared to NULL.
+     */
+    if (input.signedOff && (await columnExists("ncr", "uqarSignedOffDate"))) {
+      values.uqarSignedOffDate = existing.signedOffDate
+        ? new Date(existing.signedOffDate)
+        : new Date();
     }
   }
 

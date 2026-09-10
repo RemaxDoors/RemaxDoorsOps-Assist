@@ -56,16 +56,12 @@ export function CorrectiveActionForm({
   const [saved, setSaved] = useState<string | null>(null);
 
   /**
-   * Sign-off follows the corrective action, so it cannot be reached until one
-   * is recorded and ticked complete. Unticking complete withdraws the sign-off
-   * with it — leaving an approval attached to work that has reopened would say
-   * something untrue about the record.
-   *
-   * Derived rather than pushed into state: the tick a person made is still
-   * remembered, so re-ticking complete restores it instead of silently losing
-   * it.
+   * Sign-off stands on its own. It used to require the corrective action to be
+   * complete, and to withdraw itself when the NCR reopened — both invented
+   * here rather than asked for. A corrective action is completed whether or
+   * not anyone signs it off, and the two are recorded independently.
    */
-  const canSignOff = signOffAvailable && complete && text.trim().length > 0;
+  const canSignOff = signOffAvailable;
   const effectiveSignedOff = signedOff && canSignOff;
 
   const dirty =
@@ -251,21 +247,21 @@ export function CorrectiveActionForm({
             <span>
               <span className="text-[13px] font-bold text-ink">Signed off</span>
               <span className="mt-0.5 block text-[13px] text-ink-body">
-                {canSignOff
-                  ? "Approves the corrective action. The date is stamped by the server when this is saved."
-                  : "Available once the corrective action is written and ticked complete."}
+                {effectiveSignedOff
+                  ? "Approved. The date is stamped by the server when this is saved."
+                  : "Tick when this NCR has been approved. Optional, and separate from the corrective action."}
               </span>
             </span>
           </label>
           ) : null}
 
           {effectiveSignedOff ? (
-            <Field label="Signed off by" hint="Who is approving it">
+            <Field label="Signed off by" hint="Who is approving it — optional">
               <Select
                 value={signedOffBy}
                 onChange={(e) => setSignedOffBy(e.target.value)}
                 options={[
-                  { value: "", label: "Select a person..." },
+                  { value: "", label: "Not recorded" },
                   ...employees.map((e) => ({
                     value: e.id,
                     label: `${e.name} (${e.id})`,

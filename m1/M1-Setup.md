@@ -59,6 +59,24 @@ ORDER  BY COLUMN_NAME;
 The app caches the answer to "does this column exist", so a restart (or waiting
 out the cache) is needed before newly added columns are picked up.
 
+### If they were added as NOT NULL
+
+That is what happened in `M1_T1`, and it is the normal outcome — SQL Server
+requires a default when a NOT NULL column is added to a table that already has
+rows, so the existing NCRs were filled in automatically.
+
+It matters because clearing such a column with NULL fails the whole `UPDATE`:
+
+```
+Cannot insert the value NULL into column 'uqarSignedOffBy' ... UPDATE fails.
+```
+
+That took the corrective action down with it — an ordinary save that never
+touched the sign-off could not be recorded at all. The app no longer writes
+NULL to any of them: an unset sign-off is stored as an empty string, and the
+date is left as it was rather than cleared. Nothing needs changing in M1, but
+if these are ever recreated, nullable is the simpler shape.
+
 ## Widths worth knowing
 
 `qarCreatedBy` is `nvarchar(20)` and every existing row holds an employee id —

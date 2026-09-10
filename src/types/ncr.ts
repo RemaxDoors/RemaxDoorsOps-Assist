@@ -143,20 +143,16 @@ export const ncrUpdateSchema = z
       message: "Describe the corrective action before marking it complete",
       path: ["correctiveAction"],
     },
-  )
-  /**
-   * A sign-off is a claim that a named person approved this. Without the name
-   * it is an anonymous tick, which is worth less than no tick at all — it looks
-   * like assurance and cannot be followed up.
-   */
-  .refine((value) => !value.signedOff || Boolean(value.signedOffBy?.trim()), {
-    message: "Pick who signed it off",
-    path: ["signedOffBy"],
-  })
-  /** Signing off something that is not finished is not a meaningful record. */
-  .refine((value) => !value.signedOff || value.complete, {
-    message: "The corrective action must be complete before it can be signed off",
-    path: ["signedOff"],
-  });
+  );
+
+/**
+ * Sign-off is deliberately independent of the corrective action.
+ *
+ * Two rules were enforced here and both were wrong: that signing off required
+ * the corrective action to be complete, and that it required a named person.
+ * Neither is how the business works — a corrective action is completed whether
+ * or not anyone signs it off, and the sign-off name is not mandatory. They are
+ * separate facts about the NCR, so nothing here couples them.
+ */
 
 export type NcrUpdateInput = z.infer<typeof ncrUpdateSchema>;
