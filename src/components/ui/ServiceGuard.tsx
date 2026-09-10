@@ -33,8 +33,15 @@ export function ServiceGuard({
   const check = useCallback(async () => {
     setChecking(true);
     try {
-      const response = await fetch("/api/health", { cache: "no-store" });
-      if (response.status === 401 || response.status === 403) {
+      const response = await fetch("/api/health", {
+        cache: "no-store",
+        redirect: "manual",
+      });
+      if (
+        response.type === "opaqueredirect" ||
+        response.status === 401 ||
+        response.status === 403
+      ) {
         // The health probe is public, so a 401 here is the platform's, not
         // ours: the sign-in has lapsed.
         throw new Error(

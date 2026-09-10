@@ -33,7 +33,11 @@ export function EndpointCard({
     setRunning(true);
     setResponse(null);
     try {
-      const res = await fetch(endpoint.sample);
+      const res = await fetch(endpoint.sample, { redirect: "manual" });
+      if (res.type === "opaqueredirect") {
+        setResponse("Your sign-in has expired. Reload the page and try again.");
+        return;
+      }
       const text = await res.text();
       try {
         setResponse(

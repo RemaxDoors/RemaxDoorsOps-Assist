@@ -86,6 +86,9 @@ export function CorrectiveActionForm({
       try {
         response = await fetch(`/api/ncr/${encodeURIComponent(ncrId)}`, {
           method: "PATCH",
+          // Unfollowed, so a bounce to the sign-in page arrives as something
+          // readable instead of a bare "failed to fetch". See lib/http.ts.
+          redirect: "manual",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             correctiveAction: text,
@@ -100,6 +103,18 @@ export function CorrectiveActionForm({
         // No response at all: offline, or bounced to a sign-in page.
         throw new RequestError(
           "Could not reach the server, so nothing was saved. Reload the page and try again.",
+          null,
+        );
+      }
+
+      /**
+       * A redirect we did not follow points at the identity provider, so it
+       * means the same as a 401 — but it carries no status and no body, and
+       * reading it as JSON would throw. Checked before anything touches it.
+       */
+      if (response.type === "opaqueredirect") {
+        throw new RequestError(
+          "Your sign-in has expired, so nothing was saved. Your changes are still on screen — reload the page and save again.",
           null,
         );
       }

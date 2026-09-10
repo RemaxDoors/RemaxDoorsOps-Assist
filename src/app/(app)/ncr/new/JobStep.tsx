@@ -370,7 +370,15 @@ function M1Panel({
       try {
         const response = await fetch(
           `/api/m1/jobs?q=${encodeURIComponent(search)}&type=${value.kind}`,
+          // Unfollowed, so a bounce to the sign-in page is recognisable
+          // rather than a bare "failed to fetch". See lib/http.ts.
+          { redirect: "manual" },
         );
+        if (response.type === "opaqueredirect") {
+          throw new Error(
+            "Your sign-in has expired, so the search could not run. Reload the page and try again.",
+          );
+        }
         const body = await response.json();
         if (!response.ok) throw new Error(body.error ?? "Search failed");
         const found = body.data as M1Job[];

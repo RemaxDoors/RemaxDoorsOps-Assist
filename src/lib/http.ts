@@ -76,10 +76,22 @@ async function readError(response: Response): Promise<string> {
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(url, init);
+    /**
+     * redirect: "manual" is what makes a lapsed sign-in reportable.
+     *
+     * App Service answers an unauthenticated call with a 302 to
+     * login.microsoftonline.com. Followed, that is a cross-origin request the
+     * page may not read, so fetch rejects with a bare TypeError and the only
+     * thing left to say is "could not reach the server" — which blames the
+     * network for what is actually an expired session.
+     *
+     * Left unfollowed it arrives as an opaqueredirect we can recognise, and
+     * the person gets told the one thing that fixes it: reload.
+     */
+    response = await fetch(url, { redirect: "manual", ...init });
   } catch {
-    // TypeError from fetch: no response at all. Either genuinely offline, or
-    // the platform bounced us cross-origin to a login page.
+    // TypeError from fetch: genuinely no response — offline, or the connection
+    // dropped mid-request.
     throw new RequestError(UNREACHABLE, null);
   }
 

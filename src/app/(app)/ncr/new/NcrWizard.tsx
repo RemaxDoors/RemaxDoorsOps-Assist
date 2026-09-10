@@ -116,7 +116,7 @@ export function NcrWizard({
   // nothing is reserved until the NCR is saved.
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/ncr/next-id")
+    fetch("/api/ncr/next-id", { redirect: "manual" })
       .then((r) => (r.ok ? r.json() : null))
       .then((body) => {
         if (!cancelled && body?.data?.nextId) setNextNcrId(body.data.nextId);
@@ -211,12 +211,26 @@ export function NcrWizard({
     try {
       let response: Response;
       try {
-        response = await fetch("/api/ncr", { method: "POST", body: form });
+        response = await fetch("/api/ncr", {
+          method: "POST",
+          // Unfollowed: a bounce to the sign-in page is then readable rather
+          // than an opaque "failed to fetch". See lib/http.ts.
+          redirect: "manual",
+          body: form,
+        });
       } catch {
         // No response at all: offline, or bounced to a sign-in page. The draft
         // is still on screen, so say what to do rather than what broke.
         throw new Error(
           "Could not reach the server, so the NCR was not saved. Your entries are still here — reload the page to sign in again, then submit.",
+        );
+      }
+
+      // A redirect we did not follow points at the identity provider. It has
+      // no status and no body, so it is recognised before anything reads it.
+      if (response.type === "opaqueredirect") {
+        throw new Error(
+          "Your sign-in has expired, so the NCR was not saved. Your entries are still here — reload the page and submit again.",
         );
       }
 
