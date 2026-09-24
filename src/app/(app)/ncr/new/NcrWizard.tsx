@@ -14,10 +14,10 @@ import { JobStep, type JobSelection } from "@/app/(app)/ncr/new/JobStep";
 import { CreateTaskDialog } from "@/components/ui/CreateTaskDialog";
 import { IdlePrompt } from "@/components/ui/IdlePrompt";
 import type { Employee } from "@/lib/repositories/employee.repo";
-import { QuickPicks } from "@/components/ui/QuickPicks";
+import { GroupedQuickPicks, QuickPicks } from "@/components/ui/QuickPicks";
 import {
   DESCRIPTION_QUICK_PICKS,
-  resolveAssigneeQuickPicks,
+  resolveAssigneeTeams,
 } from "@/config/quickPicks";
 import { NCR_SEVERITIES } from "@/types/ncr";
 import type { Lookup } from "@/types/ncr";
@@ -131,8 +131,9 @@ export function NcrWizard({
       };
     });
 
-  // Names resolved to M1 employee ids; unknown or ambiguous ones are dropped.
-  const assigneePicks = resolveAssigneeQuickPicks(employees);
+  // Keys resolved to M1 employee ids, grouped by team. Each chip is labelled
+  // with the name M1 holds; unknown or ambiguous keys are dropped.
+  const assigneeTeams = resolveAssigneeTeams(employees);
 
   // The number M1 will hand out, shown while filling the form. Peeked only —
   // nothing is reserved until the NCR is saved.
@@ -444,6 +445,7 @@ export function NcrWizard({
                   value: pick.text,
                 }))}
                 onPick={appendToDescription}
+                dense
               />
 
               <div className="grid gap-4 sm:grid-cols-3">
@@ -608,12 +610,9 @@ export function NcrWizard({
                       options={employeeOptions}
                     />
                   </Field>
-                  <QuickPicks
+                  <GroupedQuickPicks
                     caption="Assign to"
-                    items={assigneePicks.map((pick) => ({
-                      label: pick.label,
-                      value: pick.id,
-                    }))}
+                    groups={assigneeTeams}
                     onPick={(id) => set("assignedTo", id)}
                   />
                 </div>

@@ -74,55 +74,99 @@ export const DESCRIPTION_QUICK_PICKS = [
 ] as const;
 
 /**
- * Assignee shortcuts, as names — never employee ids.
+ * Assignee shortcuts, by team.
  *
- * `assignedTo` has to hold an M1 employee id. Hard-coding ids here would let a
- * typo write a value M1 does not recognise, and nothing would catch it until a
- * supervisor wondered why an NCR was assigned to nobody. These names are
- * matched against the employee list M1 returned for this page instead, so a
- * chip appears only when the person is really in M1 and still current, and
- * disappears by itself when they leave.
+ * Two rules here, both deliberate.
+ *
+ * These are search keys, not labels. `assignedTo` has to hold an M1 employee
+ * id, and hard-coding ids would let one typo write a value M1 does not
+ * recognise, with nothing to catch it until a supervisor wondered why an NCR
+ * was assigned to nobody. Each key is matched against the employee list M1
+ * returned for the page instead.
+ *
+ * And the chip shows the name M1 holds, not the key. That is how a one-word key
+ * still puts a full name on screen — "Nicole" finds the row and the button then
+ * reads whatever M1 calls her. Nobody has to invent a surname to make the
+ * shortcut read properly, and if M1 is corrected the chip follows.
+ *
+ * A key that matches nobody, or more than one current employee, is dropped: a
+ * shortcut that assigns work to the wrong person is worse than no shortcut.
  */
-export const ASSIGNEE_QUICK_PICKS = [
-  "David Chua",
-  "Tim Fitz",
-  "Adrian",
-  "Davy",
-  "Harry",
-  "Damian",
-  "Kristian",
-  "Mark",
+export const ASSIGNEE_TEAMS = [
+  {
+    team: "Engineering",
+    // "Tim Fitz" rather than the full surname on purpose: the key is matched as
+    // a prefix, so it survives a spelling difference between here and M1.
+    names: ["David Chua", "Tim Fitz", "Hamish", "Eamon Galvin"],
+  },
+  {
+    team: "Project",
+    names: ["Nicole", "Andrew Butcher", "Ivy", "Hanna Ward", "Danielle Dines"],
+  },
+  {
+    team: "Planning",
+    names: ["Liliarna", "Martin", "Mikayla"],
+  },
+  {
+    team: "Warehouse, operations and production",
+    names: ["Daniel Zegelin", "Thain Voss"],
+  },
+  {
+    team: "Program services",
+    names: ["Danica Sangster", "Kellie Morse"],
+  },
+  {
+    team: "Sales",
+    names: ["Roy Young"],
+  },
+  {
+    team: "Hub managers",
+    names: ["Davy Wouters", "Kevin Shelton"],
+  },
+  {
+    team: "Field service",
+    // One person, not Adrian and Simon.
+    names: ["Adrian Simon"],
+  },
+  {
+    team: "Executive",
+    names: ["Damian", "Harrison", "Kristian", "Rovi", "Colin", "Mark"],
+  },
 ] as const;
 
 export type AssigneeQuickPick = { label: string; id: string };
 
+export type AssigneeTeam = { team: string; picks: AssigneeQuickPick[] };
+
 const normalise = (value: string) => value.trim().toLowerCase();
 
 /**
- * Resolves the names above to M1 employee ids.
+ * Resolves each key to exactly one current M1 employee, and labels the chip
+ * with that employee's own name.
  *
- * A single-word pick matches on first name, which is how the workshop refers to
- * each other. Two people sharing that first name makes the pick ambiguous, so
- * it is dropped rather than guessed — a shortcut that assigns work to the wrong
- * Damian is worse than no shortcut. Anything unmatched is dropped the same way.
+ * A single-word key is compared against the first name only, so "Mark" does not
+ * also match "Damian Markovic" and "Daniel" does not match "Danielle". A
+ * multi-word key is a prefix, so "Tim Fitz" still finds "Tim Fitzpatrick".
+ * Teams left with nobody are dropped rather than rendered empty.
  */
-export function resolveAssigneeQuickPicks(
-  employees: Employee[],
-): AssigneeQuickPick[] {
-  return ASSIGNEE_QUICK_PICKS.flatMap((pick) => {
-    const wanted = normalise(pick);
+export function resolveAssigneeTeams(employees: Employee[]): AssigneeTeam[] {
+  return ASSIGNEE_TEAMS.map((group) => ({
+    team: group.team,
+    picks: group.names.flatMap((key) => {
+      const wanted = normalise(key);
 
-    const matches = employees.filter((employee) => {
-      const name = normalise(employee.name);
-      if (name === wanted) return true;
-      // Single-word pick: compare against the first name only, so "Mark" does
-      // not also match "Damian Markovic".
-      if (!wanted.includes(" ")) return name.split(/\s+/)[0] === wanted;
-      return name.startsWith(`${wanted} `);
-    });
+      const matches = employees.filter((employee) => {
+        const name = normalise(employee.name);
+        if (name === wanted) return true;
+        if (!wanted.includes(" ")) return name.split(/\s+/)[0] === wanted;
+        return name.startsWith(wanted);
+      });
 
-    return matches.length === 1
-      ? [{ label: pick, id: matches[0]!.id }]
-      : [];
-  });
+      // The label is M1's name, not the key: that is what puts a full name on
+      // the button.
+      return matches.length === 1
+        ? [{ label: matches[0]!.name, id: matches[0]!.id }]
+        : [];
+    }),
+  })).filter((group) => group.picks.length > 0);
 }
