@@ -1,10 +1,11 @@
+import { APP_NAME } from "@/lib/version";
 import { redirect } from "next/navigation";
 import { Logo } from "@/components/layout/Logo";
 import { getSession, signInUrl } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Sign in — Operation Help" };
+export const metadata = { title: "Sign in" };
 
 export default async function LandingPage({
   searchParams,
@@ -29,7 +30,7 @@ export default async function LandingPage({
             <span className="text-brand-red">one workspace</span>
           </h2>
           <p className="mt-3 max-w-sm text-sm text-ink-body">
-            Operation Help reads live from M1 so the workshop, install crews and
+            {APP_NAME} reads live from M1 so the workshop, install crews and
             the office are all looking at the same numbers.
           </p>
         </div>

@@ -10,7 +10,7 @@ import { getSession } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "System check — Operation Help" };
+export const metadata = { title: "System check" };
 
 const TONE: Record<CheckStatus, "ok" | "warn" | "danger"> = {
   pass: "ok",

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { apiEndpoints } from "@/config/apiEndpoints";
+import { APP_NAME } from "@/lib/version";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export async function GET(request: Request) {
   const base = new URL(request.url).origin;
 
   return NextResponse.json({
-    name: "Operation Help API",
+    name: `${APP_NAME} API`,
     version: "1.0",
     baseUrl: base,
     authentication: {

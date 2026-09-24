@@ -1,5 +1,5 @@
 /**
- * The public surface of the Operation Help API, described once and used by
+ * The public surface of the NCR API, described once and used by
  * both the JSON index (/api) and the reference page (/api-docs), so the two
  * can never drift apart.
  */

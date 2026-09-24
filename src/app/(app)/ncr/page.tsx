@@ -14,7 +14,7 @@ import { ncrFilterSchema, type Lookup, type Ncr } from "@/types/ncr";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "NCR — Operation Help" };
+export const metadata = { title: "All NCRs" };
 
 /**
  * M1 stores who reported an NCR as an employee id, and those ids are terse

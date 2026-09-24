@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { APP_NAME } from "@/lib/version";
 import type { ReactNode } from "react";
 import { Montserrat } from "next/font/google";
 import { CookieConsent } from "@/components/layout/CookieConsent";
@@ -15,12 +16,19 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "Operation Help — remax DOORS",
-  description: "Operations workspace for remax DOORS",
+  /**
+   * The template is what stops the name being typed into every page's
+   * metadata: a page supplies only its own title and gets "Dashboard · NCR".
+   */
+  title: {
+    default: `${APP_NAME} — remax DOORS`,
+    template: `%s · ${APP_NAME}`,
+  },
+  description: "Non-conformance reporting for remax DOORS",
   // manifest.ts supplies the rest; iOS ignores it and needs these directly.
   appleWebApp: {
     capable: true,
-    title: "Operation Help",
+    title: APP_NAME,
     statusBarStyle: "default",
   },
   icons: {

@@ -85,7 +85,7 @@ export function ServiceGuard({
   if (unreachable) {
     return (
       <Problem
-        title="Cannot reach Operation Help"
+        title={`Cannot reach ${APP_NAME}`}
         detail={unreachable}
         onRetry={check}
         checking={checking}
@@ -153,7 +153,7 @@ function Problem({
    */
   const mailto = () => {
     const body = [
-      "Operation Help reported a problem.",
+      `${APP_NAME} reported a problem.`,
       "",
       `Problem: ${title}`,
       `Detail: ${detail}`,

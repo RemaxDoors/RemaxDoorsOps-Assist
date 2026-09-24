@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { APP_NAME } from "@/lib/version";
 
 /**
  * Makes the app installable to a phone's home screen.
@@ -13,9 +14,9 @@ import type { MetadataRoute } from "next";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Operation Help — remax DOORS",
+    name: `${APP_NAME} — remax DOORS`,
     // What fits under an icon; the long name is truncated on most launchers.
-    short_name: "Operation Help",
+    short_name: APP_NAME,
     description:
       "Raise and resolve non-conformances against M1, from the floor or the field.",
 

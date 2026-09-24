@@ -1,10 +1,10 @@
 import { PageHeader } from "@/components/layout/PageHeader";
 import { SupportReport } from "@/components/support/SupportReport";
-import { APP_NAME, versionLabel } from "@/lib/version";
+import { versionLabel } from "@/lib/version";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: `Support — ${APP_NAME}` };
+export const metadata = { title: "Support" };
 
 /**
  * One page to go to when something goes wrong.

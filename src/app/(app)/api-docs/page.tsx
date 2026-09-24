@@ -6,7 +6,7 @@ import { apiEndpoints, type ApiEndpoint } from "@/config/apiEndpoints";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "API — Operation Help" };
+export const metadata = { title: "API" };
 
 const GROUPS: ApiEndpoint["group"][] = ["NCR", "M1", "Simpro", "System"];
 
@@ -20,7 +20,7 @@ export default async function ApiDocsPage() {
     <>
       <PageHeader
         title="API"
-        description="The endpoints behind Operation Help, and what each returns."
+        description="The endpoints behind this app, and what each returns."
       />
 
       <Card className="mb-4">

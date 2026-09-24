@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { APP_NAME, versionLabel } from "@/lib/version";
 import { usePathname } from "next/navigation";
 import { navItems } from "@/config/nav";
 import { Logo } from "@/components/layout/Logo";
@@ -15,14 +16,14 @@ export function Sidebar() {
       {/* The logo is where people expect "home" to be, so it is the link. */}
       <Link
         href="/dashboard"
-        aria-label="Operation Help — go to the dashboard"
+        aria-label={`${APP_NAME} — go to the dashboard`}
         className="mx-5 my-5 block transition-opacity hover:opacity-80"
       >
         <span className="brand-plate block">
           <Logo width={140} />
         </span>
         <p className="mt-2 text-[10px] font-bold tracking-[0.18em] text-ink-muted uppercase">
-          Operation Help
+          {APP_NAME}
         </p>
       </Link>
       <div className="px-3 pb-2">
@@ -66,7 +67,9 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <div className="px-5 py-3 text-[11px] text-ink-muted">Ops Assist v0.1</div>
+      <div className="px-5 py-3 text-[11px] text-ink-muted tabular-nums">
+        {APP_NAME} {versionLabel()}
+      </div>
     </aside>
   );
 }

@@ -11,7 +11,7 @@ import { isSimproConfigured } from "@/lib/simpro/client";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Add NCR — Operation Help" };
+export const metadata = { title: "Add NCR" };
 
 export default async function AddNcrPage() {
   const session = await requireSession("/ncr/new");

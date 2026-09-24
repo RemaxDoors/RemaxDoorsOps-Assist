@@ -36,7 +36,7 @@ import type { Ncr } from "@/types/ncr";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Dashboard — Operation Help" };
+export const metadata = { title: "Dashboard" };
 
 function parsePeriod(value: unknown): Period {
   return value === "day" || value === "month" || value === "year" || value === "all"

@@ -16,7 +16,8 @@ import pkg from "../../package.json";
  * inside the bundle. A plain process.env read would be evaluated on App
  * Service, where the build-time values do not exist, and would always be null.
  */
-export const APP_NAME = "Operation Help";
+/** Short on purpose: it is what people search for and say out loud. */
+export const APP_NAME = "NCR";
 
 export const APP_VERSION: string = pkg.version;
 

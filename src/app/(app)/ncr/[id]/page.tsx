@@ -25,7 +25,7 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return { title: `NCR ${id} — Operation Help` };
+  return { title: `NCR ${id}` };
 }
 
 export default async function NcrDetailPage({
