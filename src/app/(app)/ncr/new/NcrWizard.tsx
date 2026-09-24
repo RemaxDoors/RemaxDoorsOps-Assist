@@ -14,6 +14,11 @@ import { JobStep, type JobSelection } from "@/app/(app)/ncr/new/JobStep";
 import { CreateTaskDialog } from "@/components/ui/CreateTaskDialog";
 import { IdlePrompt } from "@/components/ui/IdlePrompt";
 import type { Employee } from "@/lib/repositories/employee.repo";
+import { QuickPicks } from "@/components/ui/QuickPicks";
+import {
+  DESCRIPTION_QUICK_PICKS,
+  resolveAssigneeQuickPicks,
+} from "@/config/quickPicks";
 import { NCR_SEVERITIES } from "@/types/ncr";
 import type { Lookup } from "@/types/ncr";
 
@@ -111,6 +116,23 @@ export function NcrWizard({
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
+
+  /**
+   * Appends rather than replaces. The description is already seeded from the
+   * job summary, and a tech may want two starters ("Broken door parts" plus
+   * "Supplier issue is"), so overwriting would throw away either.
+   */
+  const appendToDescription = (text: string) =>
+    setDraft((current) => {
+      const existing = current.description.trimEnd();
+      return {
+        ...current,
+        description: existing ? `${existing}\n${text}` : text,
+      };
+    });
+
+  // Names resolved to M1 employee ids; unknown or ambiguous ones are dropped.
+  const assigneePicks = resolveAssigneeQuickPicks(employees);
 
   // The number M1 will hand out, shown while filling the form. Peeked only —
   // nothing is reserved until the NCR is saved.
@@ -415,6 +437,15 @@ export function NcrWizard({
                 />
               </Field>
 
+              <QuickPicks
+                caption="Quick start - tap one or more, then replace the [bracketed] parts"
+                items={DESCRIPTION_QUICK_PICKS.map((pick) => ({
+                  label: pick.label,
+                  value: pick.text,
+                }))}
+                onPick={appendToDescription}
+              />
+
               <div className="grid gap-4 sm:grid-cols-3">
                 <Field label="Category" required error={errors.categoryId}>
                   <Select
@@ -569,13 +600,23 @@ export function NcrWizard({
                     options={employeeOptions}
                   />
                 </Field>
-                <Field label="Assigned to">
-                  <Select
-                    value={draft.assignedTo}
-                    onChange={(e) => set("assignedTo", e.target.value)}
-                    options={employeeOptions}
+                <div>
+                  <Field label="Assigned to">
+                    <Select
+                      value={draft.assignedTo}
+                      onChange={(e) => set("assignedTo", e.target.value)}
+                      options={employeeOptions}
+                    />
+                  </Field>
+                  <QuickPicks
+                    caption="Assign to"
+                    items={assigneePicks.map((pick) => ({
+                      label: pick.label,
+                      value: pick.id,
+                    }))}
+                    onPick={(id) => set("assignedTo", id)}
                   />
-                </Field>
+                </div>
               </div>
 
               <div className="rounded-sm border border-line">
