@@ -25,4 +25,10 @@ export const navItems: NavItem[] = [
     icon: "M12 9v4m0 4h.01M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z",
     description: "Non-conformance reports",
   },
+  {
+    label: "Support",
+    href: "/support",
+    icon: "M12 17h.01M12 14c0-1.5 1.5-2 2.3-2.8a3 3 0 1 0-5-2.7M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18Z",
+    description: "Report a problem",
+  },
 ];

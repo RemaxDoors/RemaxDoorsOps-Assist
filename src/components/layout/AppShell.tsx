@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
+import { LogCollector } from "@/components/support/LogCollector";
 import type { Session } from "@/lib/auth/session";
 
 export function AppShell({
@@ -13,6 +14,7 @@ export function AppShell({
 }) {
   return (
     <div className="flex flex-1">
+      <LogCollector />
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar session={session} />

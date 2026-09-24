@@ -66,5 +66,6 @@ export const config = {
     "/ncr/:path*",
     "/system/:path*",
     "/api-docs/:path*",
+    "/support/:path*",
   ],
 };

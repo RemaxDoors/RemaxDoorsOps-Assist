@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { mailtoUrl } from "@/lib/support/report";
+import { APP_NAME } from "@/lib/version";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 
@@ -158,12 +160,10 @@ function Problem({
       `Checked at: ${checkedAt ?? new Date().toISOString()}`,
       `Page: ${typeof window === "undefined" ? "" : window.location.href}`,
       "",
-      "Raised from the Operation Help error screen.",
+      "Raised from the error screen. Please attach a screenshot before sending.",
     ].join("\n");
 
-    return `mailto:?subject=${encodeURIComponent(
-      `Operation Help: ${title}`,
-    )}&body=${encodeURIComponent(body)}`;
+    return mailtoUrl(`${APP_NAME} support: ${title}`, body);
   };
 
   return (

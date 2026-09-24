@@ -21,6 +21,8 @@
  * belongs somewhere that cannot break the page when it misfires.
  */
 
+import { logEvent } from "@/lib/support/sessionLog";
+
 export class RequestError extends Error {
   constructor(
     message: string,
@@ -100,6 +102,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   } catch {
     // TypeError from fetch: genuinely no response — offline, or the connection
     // dropped mid-request.
+    logEvent("request", `${init?.method ?? "GET"} ${url} — no response`);
     throw new RequestError(UNREACHABLE, null);
   }
 
@@ -113,7 +116,11 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    throw new RequestError(await readError(response), response.status);
+    const described = await readError(response);
+    // Recorded for the Support page. The message is the server's own
+    // explanation and a status code — never the body that was sent.
+    logEvent("request", `${init?.method ?? "GET"} ${url} — ${response.status}: ${described}`);
+    throw new RequestError(described, response.status);
   }
 
   clearStaleReauthStamp();
