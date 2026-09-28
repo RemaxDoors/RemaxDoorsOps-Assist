@@ -11,13 +11,16 @@ import { DonutChart } from "@/components/charts/DonutChart";
 import { BarChart } from "@/components/charts/BarChart";
 import { DashboardFilters } from "@/app/(app)/dashboard/DashboardFilters";
 import {
+  adoption,
   breakdown,
+  countByCloser,
   countByReporter,
   countByStatus,
   countUnassigned,
-  listNcrs,
+  listLatestNcrs,
   periodActivity,
   periodRange,
+  type Adoption,
   type NcrCounts,
   type PeriodActivity,
   type ReporterCount,
@@ -63,17 +66,21 @@ export default async function DashboardPage({
   let recent: Ncr[] = [];
   let slices: Slice[] = [];
   let reporters: ReporterCount[] = [];
+  let closers: ReporterCount[] = [];
+  let usage: Adoption;
   let activity: PeriodActivity;
   let staff: Map<string, string>;
 
   try {
-    [counts, unassigned, recent, slices, reporters, activity, staff] =
+    [counts, unassigned, recent, slices, reporters, closers, usage, activity, staff] =
       await Promise.all([
         countByStatus(),
         countUnassigned(),
-        listNcrs({ limit: 6 }),
+        listLatestNcrs(6),
         breakdown(dimension, range),
         countByReporter(range),
+        countByCloser(range),
+        adoption(range),
         periodActivity(range),
         employeeNameMap(),
       ]);
@@ -83,12 +90,16 @@ export default async function DashboardPage({
 
   const inPeriod = slices.reduce((sum, slice) => sum + slice.count, 0);
 
-  // Top raisers only: the tail is a long list of people with one or two each.
-  const topReporters = reporters.slice(0, 8).map((row) => ({
-    id: row.id,
-    label: staff.get(row.id) ?? row.id,
-    count: row.count,
-  }));
+  // Top eight only: the tail is a long list of people with one or two each.
+  const named = (rows: ReporterCount[]) =>
+    rows.slice(0, 8).map((row) => ({
+      id: row.id,
+      label: staff.get(row.id) ?? row.id,
+      count: row.count,
+    }));
+
+  const topReporters = named(reporters);
+  const topClosers = named(closers);
 
   /**
    * Year-on-year against the same slice of last year, stated plainly. The
@@ -173,7 +184,7 @@ export default async function DashboardPage({
         <Card>
           <CardHeader
             title="Who raises them"
-            subtitle={`Busiest eight, ${periodLabel}`}
+            subtitle={`Reported by, busiest eight, ${periodLabel}`}
           />
           <CardBody>
             <BarChart bars={topReporters} />
@@ -181,10 +192,80 @@ export default async function DashboardPage({
         </Card>
       </div>
 
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_320px]">
+        <Card>
+          <CardHeader
+            title="Who closes them"
+            /*
+             * "Closes", not "solves": M1 records no one against the corrective
+             * action itself, so this is who the NCR was assigned to when it was
+             * completed. uqarSignedOffBy would be the true answer.
+             */
+            subtitle={`Assigned to, on NCRs completed ${periodLabel}`}
+          />
+          <CardBody>
+            <BarChart bars={topClosers} />
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Is it being used"
+            subtitle={`Raised through this app, ${periodLabel}`}
+          />
+          <CardBody className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-2xl font-extrabold text-ink tabular-nums">
+                  {usage.viaApp}
+                </p>
+                <p className="text-[12px] text-ink-muted">
+                  through the app, of {usage.total} raised
+                </p>
+              </div>
+              <div>
+                <p className="text-2xl font-extrabold text-ink tabular-nums">
+                  {usage.people}
+                </p>
+                <p className="text-[12px] text-ink-muted">
+                  {usage.people === 1 ? "person raising them" : "people raising them"}
+                </p>
+              </div>
+            </div>
+
+            {/*
+              A fortnight of days, so "quiet since Tuesday" is visible without
+              reading numbers. Bars are relative to the busiest day, and a day
+              with none still gets a slot rather than being skipped.
+            */}
+            <div>
+              <p className="mb-1.5 text-[12px] text-ink-muted">Last 14 days</p>
+              <div className="flex h-16 items-end gap-1">
+                {usage.byDay.map((entry) => {
+                  const peak = Math.max(...usage.byDay.map((d) => d.count), 1);
+                  const height = entry.count === 0 ? 2 : (entry.count / peak) * 100;
+                  return (
+                    <div
+                      key={entry.day}
+                      title={`${entry.day}: ${entry.count}`}
+                      className="flex-1 rounded-sm bg-brand-red/80"
+                      style={{ height: `${height}%` }}
+                    />
+                  );
+                })}
+              </div>
+              <p className="mt-1 text-[11px] text-ink-muted">
+                {usage.byDay.at(-1)?.count ?? 0} today
+              </p>
+            </div>
+          </CardBody>
+        </Card>
+      </div>
+
       <Card className="mt-4">
         <CardHeader
           title="Latest non-conformances"
-          subtitle="Most recently created in M1"
+          subtitle="Highest NCR numbers in M1"
           action={
             <Link href="/ncr">
               <Button variant="secondary" size="sm">

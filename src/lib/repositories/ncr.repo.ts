@@ -1,4 +1,5 @@
 import "server-only";
+import { employeeNameMap } from "@/lib/repositories/employee.repo";
 import {
   columnExists,
   countGrouped,
@@ -226,6 +227,39 @@ function conditions(filter: NcrFilter): Condition[] {
       value: filter.category,
     });
   }
+  if (filter.code) {
+    where.push({ column: "qarNonConformanceCodeID", op: "eq", value: filter.code });
+  }
+  if (filter.cause) {
+    where.push({ column: "qarNonConformanceCauseID", op: "eq", value: filter.cause });
+  }
+  if (filter.reporter) {
+    where.push({
+      column: "qarReportedByEmployeeID",
+      op: "eq",
+      value: filter.reporter,
+    });
+  }
+  if (filter.assignee) {
+    where.push({
+      column: "uqarAssignedToEmployeeID",
+      op: "eq",
+      value: filter.assignee,
+    });
+  }
+  if (filter.from) {
+    where.push({
+      column: "qarCreatedDate",
+      op: "gte",
+      value: new Date(`${filter.from}T00:00:00`),
+    });
+  }
+  if (filter.to) {
+    // The whole of the end day, not the instant it begins.
+    const end = new Date(`${filter.to}T00:00:00`);
+    end.setDate(end.getDate() + 1);
+    where.push({ column: "qarCreatedDate", op: "lt", value: end });
+  }
   if (filter.search) {
     // One OR group: match the term against any identifying field.
     where.push([
@@ -249,6 +283,34 @@ export async function listNcrs(filter: NcrFilter): Promise<Ncr[]> {
     lookups(),
   ]);
   return rows.map((row) => toNcr(row, maps));
+}
+
+/**
+ * The most recently numbered NCRs.
+ *
+ * Ordered by number rather than created date because the number is what people
+ * quote to each other, and because a queued submission gets its number when M1
+ * comes back rather than when it was raised.
+ *
+ * qarNonConformanceID is nvarchar, so SQL sorts it as text: "9999" would come
+ * out above "10730". A wider window is fetched and sorted numerically here, so
+ * mixed-length ids cannot order wrongly.
+ */
+export async function listLatestNcrs(limit: number): Promise<Ncr[]> {
+  const window = Math.min(Math.max(limit * 8, 40), 200);
+  const [rows, maps] = await Promise.all([
+    readRows<Row>("ncr", {
+      columns: await ncrColumns(),
+      orderBy: { column: "qarNonConformanceID", direction: "desc" },
+      limit: window,
+    }),
+    lookups(),
+  ]);
+
+  return rows
+    .map((row) => toNcr(row, maps))
+    .sort((a, b) => Number(b.id) - Number(a.id))
+    .slice(0, limit);
 }
 
 export async function getNcr(id: string): Promise<Ncr | null> {
@@ -530,7 +592,12 @@ const DIMENSION_COLUMN: Record<Dimension, string> = {
   category: "qarNonConformanceCategoryID",
   code: "qarNonConformanceCodeID",
   cause: "qarNonConformanceCauseID",
+  reporter: "qarReportedByEmployeeID",
+  assignee: "uqarAssignedToEmployeeID",
 };
+
+/** People dimensions resolve ids against the employee list, not a lookup. */
+const PEOPLE_DIMENSIONS: ReadonlySet<Dimension> = new Set(["reporter", "assignee"]);
 
 export type Slice = { id: string; label: string; count: number };
 
@@ -544,9 +611,14 @@ export async function breakdown(
   dimension: Dimension,
   range: DateRange,
 ): Promise<Slice[]> {
-  const [grouped, maps] = await Promise.all([
+  const people = PEOPLE_DIMENSIONS.has(dimension);
+
+  const [grouped, maps, staff] = await Promise.all([
     countGrouped("ncr", DIMENSION_COLUMN[dimension], raisedWithin(range)),
     lookups(),
+    // Leavers included: old NCRs still carry their ids, and a bare "DJZ" in a
+    // chart is worse than the name of someone who has left.
+    people ? employeeNameMap() : Promise.resolve(new Map<string, string>()),
   ]);
 
   const map =
@@ -556,9 +628,15 @@ export async function breakdown(
         ? maps.codes
         : maps.causes;
 
+  const describe = (value: string) => {
+    if (!value) return dimension === "assignee" ? "Nobody assigned" : "Not recorded";
+    if (people) return staff.get(value) ?? value;
+    return map.get(value)?.description || value;
+  };
+
   const rows = grouped.map((row) => ({
     id: row.value || "(none)",
-    label: map.get(row.value)?.description || (row.value ? row.value : "Not recorded"),
+    label: describe(row.value),
     count: row.count,
   }));
 
@@ -586,6 +664,102 @@ export async function countByReporter(range: DateRange): Promise<ReporterCount[]
   return grouped
     .filter((row) => row.value.length > 0)
     .map((row) => ({ id: row.value, count: row.count }));
+}
+
+/**
+ * Who closes non-conformances, busiest first.
+ *
+ * Grouped by "assigned to" on NCRs whose corrective action is complete, which
+ * is the closest M1 can answer: there is no field recording who actually did
+ * the work. uqarSignedOffBy would be the true answer and is not yet usable.
+ */
+export async function countByCloser(range: DateRange): Promise<ReporterCount[]> {
+  const grouped = await countGrouped(
+    "ncr",
+    "uqarAssignedToEmployeeID",
+    solvedWithin(range),
+  );
+  return grouped
+    .filter((row) => row.value.length > 0)
+    .map((row) => ({ id: row.value, count: row.count }));
+}
+
+export type Adoption = {
+  /** Raised in the window, however they were raised. */
+  total: number;
+  /** Of those, raised through this app rather than typed into M1. */
+  viaApp: number;
+  /** Distinct people named as the reporter in the window. */
+  people: number;
+  /** The last fortnight, oldest first, for a sense of the trend. */
+  byDay: Array<{ day: string; count: number }>;
+};
+
+/**
+ * Marker for an NCR raised through this app.
+ *
+ * buildDescription ends every description it assembles with this line, and
+ * nothing in M1's own form does. It is a text match rather than a column, so
+ * it is only as stable as that wording — change the footer and this stops
+ * counting. A dedicated column would be sturdier and needs a DBA.
+ */
+const APP_FOOTER = "Entry added:";
+
+/** Melbourne day, so a 9am NCR is not filed against the previous date. */
+const melbourneDay = (when: Date) =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Australia/Melbourne",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(when);
+
+/**
+ * Is anyone actually using it?
+ *
+ * Answered from M1 rather than from web traffic: an NCR in the quality system
+ * is the only use of this app that matters, and it is the number worth showing
+ * a manager.
+ */
+export async function adoption(range: DateRange): Promise<Adoption> {
+  const fortnightAgo = new Date();
+  fortnightAgo.setDate(fortnightAgo.getDate() - 13);
+  fortnightAgo.setHours(0, 0, 0, 0);
+
+  const [total, viaApp, reporters, recentRows] = await Promise.all([
+    countRows("ncr", raisedWithin(range)),
+    countRows("ncr", [
+      ...raisedWithin(range),
+      { column: "qarNonConformanceText", op: "contains", value: APP_FOOTER },
+    ]),
+    countByReporter(range),
+    // Two columns only: this is a shape, not a report.
+    readRows<Record<string, unknown>>("ncr", {
+      columns: ["qarNonConformanceID", "qarCreatedDate"],
+      where: [{ column: "qarCreatedDate", op: "gte", value: fortnightAgo }],
+      limit: 1000,
+    }),
+  ]);
+
+  const counts = new Map<string, number>();
+  for (let i = 13; i >= 0; i--) {
+    const day = new Date();
+    day.setDate(day.getDate() - i);
+    counts.set(melbourneDay(day), 0);
+  }
+  for (const row of recentRows) {
+    const raised = row.qarCreatedDate;
+    if (!(raised instanceof Date)) continue;
+    const key = melbourneDay(raised);
+    if (counts.has(key)) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  return {
+    total,
+    viaApp,
+    people: reporters.length,
+    byDay: [...counts.entries()].map(([day, count]) => ({ day, count })),
+  };
 }
 
 export type PeriodActivity = {

@@ -7,10 +7,17 @@ import { DbError } from "@/components/ui/DbError";
 import { RefreshButton } from "@/components/ui/RefreshButton";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { NcrFilters } from "@/app/(app)/ncr/NcrFilters";
-import { listCategories, listNcrs } from "@/lib/repositories/ncr.repo";
-import { listEmployees } from "@/lib/repositories/employee.repo";
+import { listClassifications, listNcrs } from "@/lib/repositories/ncr.repo";
+import { listEmployees, type Employee } from "@/lib/repositories/employee.repo";
 import { daysSince, formatDate } from "@/lib/format";
-import { ncrFilterSchema, type Lookup, type Ncr } from "@/types/ncr";
+import {
+  GROUPINGS,
+  GROUPING_LABELS,
+  ncrFilterSchema,
+  type Grouping,
+  type Lookup,
+  type Ncr,
+} from "@/types/ncr";
 
 export const dynamic = "force-dynamic";
 
@@ -156,6 +163,44 @@ function buildNcrCard(nameOf: NameOf) {
   };
 }
 
+
+type Group = { key: string; label: string; rows: Ncr[] };
+
+/**
+ * Groups the rows already fetched, rather than querying per group.
+ *
+ * The list is capped at `limit` rows, so grouping here keeps the counts
+ * honest: every group adds up to what is on screen, and no group can claim
+ * rows the filter excluded. Groups are ordered biggest first, with the
+ * unrecorded bucket last wherever it lands.
+ */
+function groupRows(rows: Ncr[], groupBy: Grouping, nameOf: NameOf): Group[] {
+  const groups = new Map<string, Group>();
+
+  for (const row of rows) {
+    const [key, label] =
+      groupBy === "category"
+        ? [row.category?.id ?? "", row.category?.description ?? "No category"]
+        : groupBy === "code"
+          ? [row.code?.id ?? "", row.code?.description ?? "No code"]
+          : groupBy === "cause"
+            ? [row.cause?.id ?? "", row.cause?.description ?? "No cause"]
+            : groupBy === "reporter"
+              ? [row.reportedBy ?? "", row.reportedBy ? nameOf(row.reportedBy) : "Nobody recorded"]
+              : [row.assignedTo ?? "", row.assignedTo ? nameOf(row.assignedTo) : "Nobody assigned"];
+
+    const existing = groups.get(key);
+    if (existing) existing.rows.push(row);
+    else groups.set(key, { key: key || "(none)", label, rows: [row] });
+  }
+
+  return [...groups.values()].sort((a, b) => {
+    if (a.key === "(none)") return 1;
+    if (b.key === "(none)") return -1;
+    return b.rows.length - a.rows.length;
+  });
+}
+
 export default async function NcrPage({
   searchParams,
 }: {
@@ -165,22 +210,40 @@ export default async function NcrPage({
   const parsed = ncrFilterSchema.safeParse({
     status: raw.status,
     category: raw.category,
+    code: raw.code,
+    cause: raw.cause,
+    reporter: raw.reporter,
+    assignee: raw.assignee,
+    from: raw.from,
+    to: raw.to,
     search: raw.search,
     limit: raw.limit,
   });
+  // An unparseable filter falls back to no filter rather than an error page:
+  // the usual cause is a hand-edited URL, and an empty list would look like
+  // "no NCRs" instead of "that link is wrong".
   const filter = parsed.success ? parsed.data : { limit: 50 };
+  const groupBy: Grouping = GROUPINGS.includes(raw.groupBy as Grouping)
+    ? (raw.groupBy as Grouping)
+    : "none";
 
   let rows: Ncr[] = [];
   let categories: Lookup[] = [];
+  let codes: Lookup[] = [];
+  let causes: Lookup[] = [];
+  let employees: Employee[] = [];
   let staff = new Map<string, string>();
   try {
-    const [ncrs, cats, people] = await Promise.all([
+    const [ncrs, classifications, people] = await Promise.all([
       listNcrs(filter),
-      listCategories(),
+      listClassifications(),
       listEmployees(),
     ]);
     rows = ncrs;
-    categories = cats;
+    categories = classifications.categories;
+    codes = classifications.codes;
+    causes = classifications.causes;
+    employees = people;
     staff = new Map(people.map((e) => [e.id, e.name]));
   } catch (error) {
     return <DbError error={error} />;
@@ -215,15 +278,40 @@ export default async function NcrPage({
           }
         />
         <div className="border-b border-line px-4 py-3 sm:px-5">
-          <NcrFilters categories={categories} />
+          <NcrFilters
+            categories={categories}
+            codes={codes}
+            causes={causes}
+            employees={employees}
+          />
         </div>
-        <DataTable
-          columns={buildColumns(nameOf)}
-          rows={rows}
-          rowKey={(row) => row.id}
-          card={buildNcrCard(nameOf)}
-          empty="No NCRs match these filters."
-        />
+        {groupBy === "none" ? (
+          <DataTable
+            columns={buildColumns(nameOf)}
+            rows={rows}
+            rowKey={(row) => row.id}
+            card={buildNcrCard(nameOf)}
+            empty="No NCRs match these filters."
+          />
+        ) : (
+          groupRows(rows, groupBy, nameOf).map((group) => (
+            <section key={group.key}>
+              <h2 className="flex items-baseline justify-between gap-3 border-b border-line bg-canvas px-4 py-2 text-[13px] font-bold text-ink sm:px-5">
+                <span>{group.label}</span>
+                <span className="text-[12px] font-semibold text-ink-muted tabular-nums">
+                  {group.rows.length}
+                </span>
+              </h2>
+              <DataTable
+                columns={buildColumns(nameOf)}
+                rows={group.rows}
+                rowKey={(row) => row.id}
+                card={buildNcrCard(nameOf)}
+                empty="No NCRs match these filters."
+              />
+            </section>
+          ))
+        )}
       </Card>
     </>
   );

@@ -47,6 +47,17 @@ export const NCR_SEVERITIES = ["Low", "Medium", "High", "Critical"] as const;
 export const ncrFilterSchema = z.object({
   status: z.enum(NCR_STATUSES).optional(),
   category: z.string().trim().max(5).optional(),
+  code: z.string().trim().max(5).optional(),
+  cause: z.string().trim().max(5).optional(),
+  /** Employee ids: qarReportedByEmployeeID and uqarAssignedToEmployeeID. */
+  reporter: z.string().trim().max(10).optional(),
+  assignee: z.string().trim().max(10).optional(),
+  /**
+   * Raised between these dates, inclusive of `from` and of the whole of `to`.
+   * Plain yyyy-mm-dd, as the date inputs send them.
+   */
+  from: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   search: z.string().trim().max(120).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
@@ -110,14 +121,37 @@ export const PERIOD_OPTIONS: Record<Period, string> = {
   all: "All time",
 };
 
-/** The three ways M1 classifies a non-conformance. */
-export const DIMENSIONS = ["category", "code", "cause"] as const;
+/**
+ * How a set of NCRs can be broken up.
+ *
+ * The first three are M1's own classification. The last two are people, and
+ * they are resolved to names from the employee list rather than lookup tables,
+ * because M1 stores ids in those columns.
+ */
+export const DIMENSIONS = [
+  "category",
+  "code",
+  "cause",
+  "reporter",
+  "assignee",
+] as const;
 export type Dimension = (typeof DIMENSIONS)[number];
 
 export const DIMENSION_LABELS: Record<Dimension, string> = {
   category: "Category",
   code: "Code",
   cause: "Cause",
+  reporter: "Reported by",
+  assignee: "Assigned to",
+};
+
+/** The dimensions a list can be grouped under, plus "no grouping". */
+export const GROUPINGS = ["none", ...DIMENSIONS] as const;
+export type Grouping = (typeof GROUPINGS)[number];
+
+export const GROUPING_LABELS: Record<Grouping, string> = {
+  none: "No grouping",
+  ...DIMENSION_LABELS,
 };
 
 /**
