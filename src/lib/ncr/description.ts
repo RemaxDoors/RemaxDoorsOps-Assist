@@ -46,11 +46,17 @@ export function formatAudit(when: Date): string {
   )} ${get("timeZoneName")}`;
 }
 
+/**
+ * Everything except the customer, which leads the description instead.
+ *
+ * M1's list view shows only the first line of qarNonConformanceText. When that
+ * line was "Job Name: ...", the grid told a reader which job it was and nothing
+ * about what had gone wrong, so every row had to be opened to be understood.
+ */
 function contextLines(job: JobContext | null | undefined): string[] {
   if (!job) return [];
   return [
     job.name ? `Job Name: ${job.name}` : null,
-    job.customer ? `Customer: ${job.customer}` : null,
     job.site ? `Site: ${job.site}` : null,
     job.orderNo ? `Order No: ${job.orderNo}` : null,
     job.projectManager ? `Project Manager: ${job.projectManager}` : null,
@@ -76,10 +82,20 @@ export function buildDescription({
 }): string {
   const blocks: string[] = [];
 
+  /**
+   * Customer and fault, on one line, first. That line is what M1's list view
+   * shows, so it has to answer "who is affected and what went wrong" without
+   * the record being opened.
+   *
+   * The customer is not repeated in the context block below: two copies of the
+   * same value drift the moment someone edits one of them.
+   */
+  const customer = job?.customer?.trim();
+  blocks.push(customer ? `${customer}: ${issue.trim()}` : issue.trim());
+
   const context = contextLines(job);
   if (context.length) blocks.push(context.join("\n"));
 
-  blocks.push(`Issue: ${issue.trim()}`);
   blocks.push(`---\nEntry added: ${formatAudit(now)}\nUser: ${author}`);
 
   return blocks.join("\n\n");
