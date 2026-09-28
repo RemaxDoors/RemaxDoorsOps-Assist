@@ -1,19 +1,23 @@
 import type { Metadata, Viewport } from "next";
 import { APP_NAME } from "@/lib/version";
 import type { ReactNode } from "react";
-import { Montserrat } from "next/font/google";
+/**
+ * Montserrat, self-hosted.
+ *
+ * next/font/google downloaded these files during the build, which made every
+ * deploy depend on the CI runner reaching fonts.googleapis.com. It stopped
+ * being reachable and the build failed with twenty module-not-found errors
+ * that said nothing about the network. Shipping the font as a dependency
+ * removes that failure mode, and stops every visitor's browser calling Google.
+ */
+import "@fontsource/montserrat/400.css";
+import "@fontsource/montserrat/600.css";
+import "@fontsource/montserrat/700.css";
+import "@fontsource/montserrat/800.css";
 import { CookieConsent } from "@/components/layout/CookieConsent";
 import { Footer } from "@/components/layout/Footer";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
-
-/** Montserrat 400/700 — the typeface used on remaxdoors.com. */
-const montserrat = Montserrat({
-  subsets: ["latin"],
-  weight: ["400", "600", "700", "800"],
-  variable: "--font-montserrat",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   /**
@@ -53,7 +57,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={montserrat.variable} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/*
           Applies the saved theme before anything paints. Doing it in React

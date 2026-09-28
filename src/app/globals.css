@@ -27,6 +27,8 @@
   --color-danger-soft: #fdeaee;
 
   --radius-card: 4px;
+  /* Declared here now that next/font no longer injects it — see layout.tsx. */
+  --font-montserrat: "Montserrat";
   --font-sans: var(--font-montserrat), Helvetica, Arial, sans-serif;
 }
 
