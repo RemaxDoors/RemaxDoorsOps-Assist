@@ -440,17 +440,28 @@ export async function listSimproJobParts(
 }
 
 /**
- * The Simpro job's own page. Stored in M1's ucmaSimproLink so that opening an
- * attachment from M1 lands on the job, where the NCR folder lives.
+ * The Simpro job's own page, for a reader who wants the job behind an NCR.
  *
  * Simpro's API exposes no UI URL, so the path comes from
  * SIMPRO_JOB_URL_TEMPLATE ({jobId} placeholder) and can be corrected without
  * a code change.
+ *
+ * The default was projectJob.php, which was a guess and returns an error.
+ * Confirmed against a real job: a project opens at editProject.php.
+ *
+ * KNOWN GAP: service jobs almost certainly live on a different page, and this
+ * takes only a job number, so both kinds get the project URL. The wizard knows
+ * which kind it is — passing that through is the fix, once someone confirms the
+ * service address.
+ *
+ * The leading slash matters. SIMPRO_BASE_URL carries the API path
+ * (.../api/v1.0/companies/4), and only an absolute path discards it; without
+ * it the link would be built relative to the API and point nowhere.
  */
 export function simproJobUrl(jobId: string): string {
   const { baseUrl } = requireConfig();
   const template =
-    process.env.SIMPRO_JOB_URL_TEMPLATE ?? "/staff/projectJob.php?jobID={jobId}";
+    process.env.SIMPRO_JOB_URL_TEMPLATE ?? "/staff/editProject.php?jobID={jobId}";
   return new URL(
     template.replace("{jobId}", encodeURIComponent(jobId)),
     baseUrl,
