@@ -178,6 +178,44 @@ export async function listNcrAttachments(ncrId: string): Promise<NcrAttachment[]
 }
 
 /**
+ * One attachment, for serving its bytes back to a signed-in user.
+ *
+ * Returns null unless the row is an NCR attachment whose file sits inside
+ * ATTACHMENT_DIR. That containment check is the point of this function:
+ * dbo.Attachments holds every attachment in M1 — accounts payable invoices
+ * included — and without it this would hand any signed-in user a way to read
+ * them. Only files this app wrote are servable.
+ */
+export async function findServableAttachment(
+  attachmentId: string,
+): Promise<{ path: string; filename: string } | null> {
+  const rows = await readRows<Record<string, unknown>>("attachment", {
+    columns: ["cmaAttachmentID", "cmaFilename", "cmaFileLocation", "cmaNonConformanceID"],
+    where: [{ column: "cmaAttachmentID", op: "eq", value: attachmentId }],
+    limit: 1,
+  });
+
+  const row = rows[0];
+  if (!row) return null;
+  if (!String(row.cmaNonConformanceID ?? "").trim()) return null;
+
+  const location = String(row.cmaFileLocation ?? "").trim();
+  if (!location) return null;
+
+  const resolved = path.resolve(location);
+  const root = path.resolve(attachmentDir());
+  // path.relative is the reliable containment test: a plain startsWith would
+  // accept "/home/data/uploads-elsewhere" as being inside "/home/data/uploads".
+  const inside = path.relative(root, resolved);
+  if (inside.startsWith("..") || path.isAbsolute(inside)) return null;
+
+  return {
+    path: resolved,
+    filename: String(row.cmaFilename ?? path.basename(resolved)).trim(),
+  };
+}
+
+/**
  * Records an already-stored file against an NCR.
  *
  * Used when draining the queue: the file was written to the attachment store

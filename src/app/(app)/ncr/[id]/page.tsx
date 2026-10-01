@@ -6,6 +6,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { DbError } from "@/components/ui/DbError";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RefreshButton } from "@/components/ui/RefreshButton";
+import { SimproAttachments } from "@/components/ui/SimproAttachments";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TaskButton } from "@/app/(app)/ncr/[id]/TaskButton";
 import { CorrectiveActionForm } from "@/app/(app)/ncr/[id]/CorrectiveActionForm";
@@ -258,19 +259,51 @@ export default async function NcrDetailPage({
           <CardHeader
             title="Attachments"
             subtitle={`${attachments.length} file${attachments.length === 1 ? "" : "s"}`}
+            action={
+              /*
+                The same photos are filed on the Simpro job, under a folder
+                named after the NCR. Useful for anyone who lives in Simpro, and
+                the only copy a person outside this app can reach.
+              */
+              simproJobHref ? (
+                <a
+                  href={simproJobHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[12px] font-semibold text-brand-red hover:underline"
+                >
+                  Open in Simpro
+                </a>
+              ) : null
+            }
           />
+          {/*
+            Simpro's copy first: it is the one a reviewer can still open from
+            their phone or from the job itself, and it shows the photo rather
+            than naming a file.
+          */}
+          {isSimproConfigured() && ncr.simproJobId ? (
+            <SimproAttachments jobId={ncr.simproJobId} ncrId={ncr.id} />
+          ) : null}
+
           {attachments.length === 0 ? (
             <EmptyState message="No photos or documents on this NCR." />
           ) : (
             <ul className="divide-y divide-line">
               {attachments.map((file) => (
                 <li key={file.id} className="px-5 py-3">
-                  <p className="text-[13px] font-semibold break-words text-ink">
+                  {/*
+                    The filename opens the file. It used to print the stored
+                    path, which named a disk on the server and opened nothing.
+                  */}
+                  <a
+                    href={`/api/attachments/${encodeURIComponent(file.id)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[13px] font-semibold break-words text-ink hover:text-brand-red hover:underline"
+                  >
                     {file.filename || file.description}
-                  </p>
-                  <p className="mt-0.5 text-[12px] break-all text-ink-muted">
-                    {file.location}
-                  </p>
+                  </a>
                   <p className="mt-1 text-[12px] text-ink-muted">
                     {formatDate(file.createdAt)}
                     {file.createdBy ? ` · ${file.createdBy}` : ""}

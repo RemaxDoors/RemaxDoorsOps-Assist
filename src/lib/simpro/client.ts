@@ -468,6 +468,158 @@ export function simproJobUrl(jobId: string): string {
   ).toString();
 }
 
+export type SimproAttachment = { id: string; filename: string };
+
+type SimproFile = {
+  ID?: number | string;
+  Filename?: string;
+  MimeType?: string;
+  Base64Data?: string;
+  Folder?: number | string | { ID?: number | string } | null;
+};
+
+/** The folder this app files an NCR's photos under, when it has to create one. */
+const ncrFolderName = (ncrId: string) => `NCR ${ncrId}`;
+
+/**
+ * Recognises a folder as belonging to an NCR.
+ *
+ * Deliberately looser than the name this app writes. A job accumulates folders
+ * made by people as well as by this app — "NCR10740", "NCR 10740 - site
+ * photos", "ncr 10740" — and an exact match would report "nothing filed"
+ * while the photos sat in plain sight.
+ *
+ * Still anchored to the number, and to a digit boundary: a job can carry
+ * several NCR folders, and 10740 must not match 107401.
+ */
+const ncrFolderPattern = (ncrId: string) =>
+  new RegExp(`^\\s*NCR\\s*[-#:]?\\s*${ncrId.replace(/[^\\w]/g, "")}(?!\\d)`, "i");
+
+const matchesNcrFolder = (name: string | undefined, ncrId: string) =>
+  Boolean(name && ncrFolderPattern(ncrId).test(name.trim()));
+
+const attachmentsBase = (companyId: string | number, jobId: string) =>
+  `companies/${companyId}/jobs/${encodeURIComponent(jobId)}/attachments`;
+
+/**
+ * The files this app filed against an NCR on a Simpro job.
+ *
+ * Read back rather than remembered: M1 has nowhere to record a Simpro file id
+ * today, and Simpro is the system that knows what is actually there. If a
+ * photo is deleted in Simpro it stops being listed here, which is the honest
+ * behaviour — a remembered id would keep pointing at nothing.
+ *
+ * Returns an empty list rather than throwing when the folder does not exist:
+ * an NCR raised before this, or one whose upload failed, simply has none.
+ */
+export async function listSimproNcrAttachments({
+  jobId,
+  ncrId,
+}: {
+  jobId: string;
+  ncrId: string;
+}): Promise<SimproAttachment[]> {
+  const { companyId } = requireConfig();
+  const base = attachmentsBase(companyId, jobId);
+
+  /**
+   * pageSize is 30 by default and 250 is the documented maximum. A job with a
+   * long attachment history would otherwise lose the NCR folder off the end of
+   * page one, and the panel would report nothing filed.
+   */
+  const page = { pageSize: "250" };
+
+  const folders = await simpro<{ ID?: number | string; Name?: string }[]>(
+    `${base}/folders/`,
+    { searchParams: { ...page, columns: "ID,Name" } },
+  );
+
+  // Every folder on the job that names this NCR, not just the one this app
+  // would have created: someone may have filed photos in their own.
+  const folderIds = new Set(
+    folders
+      .filter((folder) => matchesNcrFolder(folder.Name, ncrId) && folder.ID !== undefined)
+      .map((folder) => String(folder.ID)),
+  );
+  if (folderIds.size === 0) return [];
+
+  /**
+   * The list endpoint returns ID and Filename only — no Folder — so it is
+   * asked for explicitly. Simpro may still decline, which is why the fallback
+   * below exists rather than a filter that silently matches nothing.
+   */
+  const listed = await simpro<SimproFile[]>(`${base}/files/`, {
+    searchParams: { ...page, columns: "ID,Filename,Folder" },
+  });
+
+  const withFolder = listed.filter((file) => file.Folder !== undefined);
+
+  const files =
+    withFolder.length > 0
+      ? withFolder
+      : /**
+         * Folder was not returned on the list, so each file is read on its own:
+         * the detail endpoint documents Folder as {ID, Name}. Capped, because
+         * this is one request per attachment and a busy job should not turn an
+         * NCR page into a hundred calls.
+         */
+        (
+          await Promise.all(
+            listed.slice(0, 40).map((file) =>
+              simpro<SimproFile>(
+                `${base}/files/${encodeURIComponent(String(file.ID ?? ""))}`,
+              ).catch(() => null),
+            ),
+          )
+        ).filter((file): file is SimproFile => file !== null);
+
+  // Folder is an id on create and an object on the detail endpoint, so both
+  // shapes are accepted rather than assuming one.
+  const belongs = (file: SimproFile) => {
+    const value =
+      file.Folder && typeof file.Folder === "object" ? file.Folder.ID : file.Folder;
+    return value !== undefined && folderIds.has(String(value));
+  };
+
+  return files
+    .filter(belongs)
+    .map((file) => ({
+      id: String(file.ID ?? ""),
+      filename: String(file.Filename ?? "").trim() || "Attachment",
+    }))
+    .filter((file) => file.id.length > 0);
+}
+
+/**
+ * One file's bytes, so the app can show the photo without the viewer needing
+ * a Simpro login. The API returns it base64-encoded on the file record.
+ */
+export async function getSimproAttachmentFile({
+  jobId,
+  fileId,
+}: {
+  jobId: string;
+  fileId: string;
+}): Promise<{ filename: string; mimeType: string | null; contents: Buffer } | null> {
+  const { companyId } = requireConfig();
+  /**
+   * display=Base64 is required: without it the response describes the file but
+   * carries no content, and this returned null for every attachment.
+   */
+  const file = await simpro<SimproFile>(
+    `${attachmentsBase(companyId, jobId)}/files/${encodeURIComponent(fileId)}`,
+    { searchParams: { display: "Base64" } },
+  );
+
+  if (!file.Base64Data) return null;
+  return {
+    filename: String(file.Filename ?? "attachment").trim(),
+    // Simpro states the type; trust it over guessing from the extension.
+    mimeType: file.MimeType?.trim() || null,
+    contents: Buffer.from(file.Base64Data, "base64"),
+  };
+}
+
 /**
  * Uploads a file into a per-NCR folder on a Simpro job, and returns the link
  * to the job for storing against the attachment in M1.
@@ -489,14 +641,16 @@ export async function uploadSimproJobAttachment({
   folderName: string;
 }> {
   const { companyId } = requireConfig();
-  const base = `companies/${companyId}/jobs/${encodeURIComponent(jobId)}/attachments`;
-  const folderName = `NCR ${ncrId}`;
+  const base = attachmentsBase(companyId, jobId);
+  const folderName = ncrFolderName(ncrId);
 
   // Reuse the NCR's folder if a previous upload already made it.
   const existing = await simpro<{ ID?: number | string; Name?: string }[]>(
     `${base}/folders/`,
   );
-  const match = existing.find((f) => f.Name?.trim() === folderName);
+  // Same recognition as the reader, so a folder someone named slightly
+  // differently is reused rather than shadowed by a second one.
+  const match = existing.find((f) => matchesNcrFolder(f.Name, ncrId));
 
   const folder =
     match ??
