@@ -197,9 +197,15 @@ export async function POST(request: Request) {
     );
   }
 
+  // Counted so the save can say the photos reached Simpro, rather than leaving
+  // the person to go and look.
+  let simproCopies = 0;
+  /** Ids of what was stored, so a notification can link to each photo. */
+  const savedAttachments: Array<{ id: string; filename: string }> = [];
+
   for (const file of accepted) {
     try {
-      await saveNcrAttachment({
+      const saved = await saveNcrAttachment({
         ncrId,
         jobId: input.jobId,
         partId: input.partId,
@@ -208,13 +214,32 @@ export async function POST(request: Request) {
         createdBy,
         simproJobId: input.simproJobId,
       });
+
+      savedAttachments.push({ id: saved.id, filename: saved.filename });
+      if (saved.simproLink) simproCopies += 1;
+      /**
+       * saveNcrAttachment reports a failed Simpro copy as a warning rather than
+       * throwing — the file is on the share and the NCR is saved. That warning
+       * was being discarded here, so "the photo never reached Simpro" looked
+       * exactly like success.
+       */
+      if (saved.warning) warnings.push(saved.warning);
     } catch (error) {
       warnings.push(`Could not save ${file.name}: ${message(error)}`);
     }
   }
 
   return NextResponse.json(
-    { data: { ncrId, queued: false, attachments: accepted.length }, warnings },
+    {
+      data: {
+        ncrId,
+        queued: false,
+        attachments: accepted.length,
+        simproAttachments: simproCopies,
+        savedAttachments,
+      },
+      warnings,
+    },
     { status: 201 },
   );
 }

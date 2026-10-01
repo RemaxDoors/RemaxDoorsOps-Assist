@@ -15,6 +15,7 @@ import { CreateTaskDialog } from "@/components/ui/CreateTaskDialog";
 import { IdlePrompt } from "@/components/ui/IdlePrompt";
 import type { Employee } from "@/lib/repositories/employee.repo";
 import { GroupedQuickPicks, QuickPicks } from "@/components/ui/QuickPicks";
+import { mailto } from "@/lib/support/report";
 import {
   DESCRIPTION_QUICK_PICKS,
   resolveAssigneeTeams,
@@ -108,11 +109,16 @@ export function NcrWizard({
   const [result, setResult] = useState<{
     ncrId: string;
     attachments: number;
+    /** How many of those also reached the Simpro job. */
+    simproAttachments?: number;
+    savedAttachments?: Array<{ id: string; filename: string }>;
     warnings: string[];
   } | null>(null);
   const [taskOpen, setTaskOpen] = useState(false);
   /** Chosen on the last step; opens the task window once the NCR is saved. */
   const [wantTask, setWantTask] = useState(false);
+  /** Chosen on the last step; opens a pre-filled email once the NCR is saved. */
+  const [wantEmail, setWantEmail] = useState(false);
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -130,6 +136,52 @@ export function NcrWizard({
         description: existing ? `${existing}\n${text}` : text,
       };
     });
+
+  const assignee = employees.find((person) => person.id === draft.assignedTo) ?? null;
+
+  /**
+   * A draft in the person's own mail client, not a send.
+   *
+   * The app has no mailbox, so nothing can leave on its own — and nothing
+   * should: the person raising the NCR usually wants to add a line before it
+   * goes. Photos are linked rather than attached because a web page cannot put
+   * a file into someone's email; the links open the photo for anyone signed in.
+   */
+  const assigneeMailto = () => {
+    if (!result || !assignee?.email) return "";
+    const origin = typeof window === "undefined" ? "" : window.location.origin;
+    const photos = result.savedAttachments ?? [];
+
+    const body = [
+      `${assignee.name},`,
+      "",
+      `NCR ${result.ncrId} has been assigned to you.`,
+      "",
+      draft.customer ? `Customer: ${draft.customer}` : null,
+      draft.simproJobId || draft.jobId
+        ? `Job: ${draft.simproJobId || draft.jobId}`
+        : null,
+      draft.severity ? `Severity: ${draft.severity}` : null,
+      "",
+      "What was reported:",
+      draft.description.trim(),
+      "",
+      `Open the NCR: ${origin}/ncr/${result.ncrId}`,
+      photos.length
+        ? ["", `Photos (${photos.length}):`, ...photos.map(
+            (photo) => `  ${photo.filename}: ${origin}/api/attachments/${photo.id}`,
+          )].join("\n")
+        : null,
+    ]
+      .filter((line) => line !== null)
+      .join("\n");
+
+    return mailto({
+      to: assignee.email,
+      subject: `NCR ${result.ncrId} assigned to you`,
+      body,
+    });
+  };
 
   // Keys resolved to M1 employee ids, grouped by team. Each chip is labelled
   // with the name M1 holds; unknown or ambiguous keys are dropped.
@@ -328,6 +380,33 @@ export function NcrWizard({
             <Summary label="Job" value={draft.simproJobId || draft.jobId || "-"} />
           </dl>
 
+          {/*
+            Said out loud, because the Simpro copy is the one a person can open
+            from anywhere — and because silence after an upload reads as "did
+            that work?". A failure says so in the warnings below instead.
+          */}
+          {result.simproAttachments ? (
+            <p className="rounded-sm border border-ok/20 bg-ok-soft px-4 py-3 text-[13px] text-ok">
+              {result.simproAttachments === 1
+                ? "1 photo saved to the Simpro job"
+                : `${result.simproAttachments} photos saved to the Simpro job`}
+              {draft.simproJobId ? ` ${draft.simproJobId}` : ""}, in the folder
+              named NCR {result.ncrId}.
+            </p>
+          ) : null}
+
+          {wantEmail && assignee?.email ? (
+            <p className="rounded-sm border border-line bg-canvas px-4 py-3 text-[13px] text-ink-body">
+              A draft to <span className="font-bold text-ink">{assignee.email}</span>{" "}
+              is ready — press <span className="font-bold text-ink">Email{" "}
+              {assignee.name}</span> below, add anything you want to say, and send
+              it.
+              {result.savedAttachments?.length
+                ? " The photos are linked in the email rather than attached; the links open them for anyone signed in."
+                : ""}
+            </p>
+          ) : null}
+
           {result.warnings.length > 0 ? (
             <ul className="space-y-1 rounded-sm border border-warn/20 bg-warn-soft px-4 py-3 text-[13px] text-warn">
               {result.warnings.map((warning) => (
@@ -340,6 +419,11 @@ export function NcrWizard({
             <Button onClick={() => router.push(`/ncr/${result.ncrId}`)}>
               View this NCR
             </Button>
+            {wantEmail && assignee?.email ? (
+              <a href={assigneeMailto()}>
+                <Button variant="secondary">Email {assignee.name}</Button>
+              </a>
+            ) : null}
             {simproConnected ? (
               <Button variant="secondary" onClick={() => setTaskOpen(true)}>
                 Create Simpro task
@@ -615,6 +699,33 @@ export function NcrWizard({
                     groups={assigneeTeams}
                     onPick={(id) => set("assignedTo", id)}
                   />
+
+                  {/*
+                    Offered only once there is somebody to email, and only when
+                    M1 holds an address for them — a tick box that cannot do
+                    anything is worse than no tick box.
+                  */}
+                  {draft.assignedTo ? (
+                    <label className="mt-3 flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={wantEmail && Boolean(assignee?.email)}
+                        disabled={!assignee?.email}
+                        onChange={(e) => setWantEmail(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 accent-[var(--color-brand-red)]"
+                      />
+                      <span className="text-[13px]">
+                        <span className="font-bold text-ink">
+                          Email {assignee?.name ?? "them"} about this NCR
+                        </span>
+                        <span className="mt-0.5 block text-[12px] text-ink-muted">
+                          {assignee?.email
+                            ? `Opens a draft to ${assignee.email} once the NCR is saved. You press send.`
+                            : "M1 has no email address for this person, so nothing can be sent."}
+                        </span>
+                      </span>
+                    </label>
+                  ) : null}
                 </div>
               </div>
 

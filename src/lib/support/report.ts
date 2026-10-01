@@ -76,8 +76,21 @@ export function buildMailBody(input: ReportInput): string {
   return body;
 }
 
-export function mailtoUrl(subject: string, body: string): string {
-  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(
+/** A pre-filled draft in the person's own mail client. */
+export function mailto({
+  to,
+  subject,
+  body,
+}: {
+  to?: string;
+  subject: string;
+  body: string;
+}): string {
+  return `mailto:${to ?? ""}?subject=${encodeURIComponent(
     subject,
   )}&body=${encodeURIComponent(body)}`;
+}
+
+export function mailtoUrl(subject: string, body: string): string {
+  return mailto({ to: SUPPORT_EMAIL, subject, body });
 }
