@@ -112,6 +112,8 @@ export function NcrWizard({
     /** How many of those also reached the Simpro job. */
     simproAttachments?: number;
     savedAttachments?: Array<{ id: string; filename: string }>;
+    /** Where the photos can be opened without signing in to this app. */
+    simproJobUrl?: string | null;
     warnings: string[];
   } | null>(null);
   const [taskOpen, setTaskOpen] = useState(false);
@@ -167,11 +169,19 @@ export function NcrWizard({
       draft.description.trim(),
       "",
       `Open the NCR: ${origin}/ncr/${result.ncrId}`,
-      photos.length
-        ? ["", `Photos (${photos.length}):`, ...photos.map(
-            (photo) => `  ${photo.filename}: ${origin}/api/attachments/${photo.id}`,
-          )].join("\n")
-        : null,
+      /**
+       * Photos point at the Simpro job, not at this app.
+       *
+       * The app's own file links demand a sign-in, and landing on a sign-in
+       * page from an email reads as a broken link however correct it is.
+       * Simpro is where the recipient is already working, and the folder is
+       * named after the NCR.
+       */
+      photos.length && result.simproJobUrl
+        ? ["", `Photos (${photos.length}) are on the Simpro job, in the folder named NCR ${result.ncrId}:`, `  ${result.simproJobUrl}`].join("\n")
+        : photos.length
+          ? `\n${photos.length} photo${photos.length === 1 ? "" : "s"} are attached to the NCR — open it with the link above.`
+          : null,
     ]
       .filter((line) => line !== null)
       .join("\n");
@@ -402,7 +412,9 @@ export function NcrWizard({
               {assignee.name}</span> below, add anything you want to say, and send
               it.
               {result.savedAttachments?.length
-                ? " The photos are linked in the email rather than attached; the links open them for anyone signed in."
+                ? result.simproJobUrl
+                  ? " The email points at the Simpro job for the photos, so they open without signing in to this app."
+                  : " The photos are not linked in the email — there is no Simpro job on this NCR — so the email links to the NCR instead."
                 : ""}
             </p>
           ) : null}

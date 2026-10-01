@@ -4,6 +4,7 @@ import { saveNcrAttachment, storeAttachmentFile } from "@/lib/repositories/attac
 import { getSession } from "@/lib/auth/session";
 import { employeeNameMap, findEmployeeForUser } from "@/lib/repositories/employee.repo";
 import { isDatabaseUnreachable } from "@/lib/db/errors";
+import { isSimproConfigured, simproJobUrl } from "@/lib/simpro/client";
 import { enqueueSubmission } from "@/lib/queue/submissionQueue";
 import { ncrCreateSchema, ncrFilterSchema } from "@/types/ncr";
 import { buildDescription } from "@/lib/ncr/description";
@@ -237,6 +238,14 @@ export async function POST(request: Request) {
         attachments: accepted.length,
         simproAttachments: simproCopies,
         savedAttachments,
+        /**
+         * Where the photos can be opened without this app. Built here because
+         * the URL template lives in server config.
+         */
+        simproJobUrl:
+          input.simproJobId && isSimproConfigured()
+            ? simproJobUrl(input.simproJobId)
+            : null,
       },
       warnings,
     },
