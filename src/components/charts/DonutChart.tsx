@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { OTHER, SERIES } from "@/components/charts/palette";
 
 /**
  * Category breakdown as a donut with a value legend.
@@ -12,19 +13,6 @@ import { useState } from "react";
  */
 
 export type Slice = { id: string; label: string; count: number };
-
-/** Validated categorical order — assigned by position, never cycled. */
-const SERIES = [
-  "#2a78d6",
-  "#eb6834",
-  "#1baf7a",
-  "#eda100",
-  "#e87ba4",
-  "#008300",
-] as const;
-
-/** Anything past the palette folds into one grey rest-of-field. */
-const OTHER = "#9a9a95";
 
 const SIZE = 190;
 const RADIUS = 82;

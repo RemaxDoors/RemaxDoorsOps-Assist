@@ -145,6 +145,68 @@ export const DIMENSION_LABELS: Record<Dimension, string> = {
   assignee: "Assigned to",
 };
 
+/** How far back the trend looks. The bucket size follows from it. */
+export const TREND_RANGES = ["week", "month", "6months", "year", "custom"] as const;
+export type TrendRange = (typeof TREND_RANGES)[number];
+
+export const TREND_RANGE_LABELS: Record<TrendRange, string> = {
+  week: "Week",
+  month: "Month",
+  "6months": "6 months",
+  year: "Year",
+  custom: "Between dates",
+};
+
+/** What a trend bar can be split by. Cost is a measure, so it has its own chart. */
+export const TREND_DIMENSIONS = ["category", "code", "cause", "severity"] as const;
+export type TrendDimension = (typeof TREND_DIMENSIONS)[number];
+
+export const TREND_DIMENSION_LABELS: Record<TrendDimension, string> = {
+  category: "Category",
+  code: "Reason code",
+  cause: "Cause",
+  severity: "Severity",
+};
+
+/**
+ * The id the tail of a breakdown is collected under.
+ *
+ * The server decides what folds into "Other" and the chart decides what colour
+ * it gets, so the id has to be the same string in both places.
+ */
+export const TREND_OTHER_ID = "__other";
+
+/** How wide one bar is. Chosen from the window, not by the person. */
+export type TrendBucketSize = "day" | "week" | "month";
+
+export type TrendBucket = {
+  /** yyyy-mm-dd of the bucket start, used as the key. */
+  start: string;
+  label: string;
+  /** Count per series id in this bucket. */
+  counts: Record<string, number>;
+  /** Extra cost recorded against NCRs raised in this bucket. */
+  cost: number;
+};
+
+export type TrendSeries = { id: string; label: string; total: number };
+
+export type Trend = {
+  buckets: TrendBucket[];
+  series: TrendSeries[];
+  total: number;
+  totalCost: number;
+  /** True when some NCRs fell outside the row cap and the numbers understate. */
+  truncated: boolean;
+  bucket: TrendBucketSize;
+  /**
+   * Why the chart is empty or partial, in words for the screen. Null when the
+   * numbers are complete — a missing M1 column is not an error, but it is not
+   * something to leave the reader guessing about either.
+   */
+  note: string | null;
+};
+
 /** The dimensions a list can be grouped under, plus "no grouping". */
 export const GROUPINGS = ["none", ...DIMENSIONS] as const;
 export type Grouping = (typeof GROUPINGS)[number];

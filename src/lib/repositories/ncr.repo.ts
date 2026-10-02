@@ -11,6 +11,13 @@ import {
 } from "@/lib/db/gateway";
 import { toRtf } from "@/lib/m1/rtf";
 import { assertWritesAllowed } from "@/lib/config/environment";
+import {
+  bucketStart,
+  emptyBuckets,
+  foldSeries,
+  isoDay,
+  type Window,
+} from "@/lib/ncr/trend";
 import type {
   Dimension,
   Lookup,
@@ -20,6 +27,9 @@ import type {
   NcrUpdateInput,
   NcrStatus,
   Period,
+  Trend,
+  TrendBucketSize,
+  TrendDimension,
 } from "@/types/ncr";
 
 /**
@@ -992,4 +1002,126 @@ export async function updateCorrectiveAction(
   ]);
 
   return ncr ? { ncr, verification } : null;
+}
+
+/* ---------------------------------------------------------------- trend --- */
+
+/**
+ * NCR Trend: how many were raised per period, split by one classification,
+ * plus the extra cost recorded against them.
+ *
+ * Read as rows rather than as one grouped query per bar, because a bar needs
+ * both its date bucket and its classification while the gateway groups on a
+ * single column. One query of at most TREND_ROW_CAP rows covers a year here;
+ * when it does not, the shortfall is declared rather than quietly understated.
+ *
+ * Buckets are cut on this server's midnights, the same convention as
+ * periodRange, so they move with the app's timezone and not with M1's.
+ */
+const TREND_ROW_CAP = 1000;
+
+const TREND_DIMENSION_COLUMN: Record<TrendDimension, string> = {
+  category: DIMENSION_COLUMN.category,
+  code: DIMENSION_COLUMN.code,
+  cause: DIMENSION_COLUMN.cause,
+  severity: "uqarSeverity",
+};
+
+export async function trend(
+  dimension: TrendDimension,
+  window: Window,
+  bucket: TrendBucketSize,
+): Promise<Trend> {
+  const column = TREND_DIMENSION_COLUMN[dimension];
+  const [hasDimension, hasCost] = await Promise.all([
+    // Only severity is user-defined; the other three are in every M1.
+    dimension === "severity" ? columnExists("ncr", column) : Promise.resolve(true),
+    columnExists("ncr", "uqarNumAddCost"),
+  ]);
+
+  if (!hasDimension) {
+    return {
+      buckets: emptyBuckets(window, bucket),
+      series: [],
+      total: 0,
+      totalCost: 0,
+      truncated: false,
+      bucket,
+      note: `This M1 has no ${column} column yet, so NCRs cannot be split by ${dimension}.`,
+    };
+  }
+
+  const range: DateRange = { from: window.from, to: window.to };
+  const [rows, exactTotal, maps] = await Promise.all([
+    readRows<Row>("ncr", {
+      columns: [
+        "qarCreatedDate",
+        column,
+        ...(hasCost ? ["uqarNumAddCost"] : []),
+      ],
+      where: raisedWithin(range),
+      orderBy: { column: "qarCreatedDate", direction: "desc" },
+      limit: TREND_ROW_CAP,
+    }),
+    countRows("ncr", raisedWithin(range)),
+    lookups(),
+  ]);
+
+  const map =
+    dimension === "category"
+      ? maps.categories
+      : dimension === "code"
+        ? maps.codes
+        : dimension === "cause"
+          ? maps.causes
+          : null;
+
+  /** Blank is real in M1 — plenty of records were never classified. */
+  const describe = (value: string) => {
+    if (!value) return "Not recorded";
+    if (!map) return value;
+    return map.get(value)?.description || value;
+  };
+
+  const buckets = emptyBuckets(window, bucket);
+  const slot = new Map(buckets.map((entry, i) => [entry.start, i]));
+  const tallies = new Map<string, { label: string; total: number }>();
+
+  for (const row of rows) {
+    const raised = row.qarCreatedDate;
+    if (!(raised instanceof Date)) continue;
+    const index = slot.get(isoDay(bucketStart(raised, bucket)));
+    if (index === undefined) continue;
+
+    const value = text(row[column]) ?? "";
+    const id = value || "(none)";
+    const tally = tallies.get(id) ?? { label: describe(value), total: 0 };
+    tally.total += 1;
+    tallies.set(id, tally);
+
+    const target = buckets[index];
+    target.counts[id] = (target.counts[id] ?? 0) + 1;
+    target.cost += Number(row.uqarNumAddCost ?? 0) || 0;
+  }
+
+  const series = foldSeries(
+    [...tallies.entries()].map(([id, tally]) => ({ id, ...tally })),
+    buckets,
+  );
+
+  const truncated = exactTotal > rows.length;
+
+  return {
+    buckets,
+    series,
+    total: rows.length,
+    totalCost: buckets.reduce((sum, entry) => sum + entry.cost, 0),
+    truncated,
+    bucket,
+    note: truncated
+      ? `Showing the most recent ${rows.length} of ${exactTotal} NCRs in this window — narrow the dates for exact numbers.`
+      : hasCost
+        ? null
+        : "This M1 has no uqarNumAddCost column, so no cost is recorded against NCRs.",
+  };
 }

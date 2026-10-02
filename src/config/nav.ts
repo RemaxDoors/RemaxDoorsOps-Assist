@@ -11,7 +11,7 @@ export const navItems: NavItem[] = [
     label: "Dashboard",
     href: "/dashboard",
     icon: "M3 10.5 12 3l9 7.5M5.25 9.75V20a1 1 0 0 0 1 1h3.5v-5.5h4.5V21h3.5a1 1 0 0 0 1-1V9.75",
-    description: "Operations overview",
+    description: "NCR trend and totals",
   },
   {
     label: "System",

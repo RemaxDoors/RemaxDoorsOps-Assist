@@ -7,12 +7,13 @@ import { test, expect } from "@playwright/test";
  * API contract test below, which is also read-only.
  */
 test.describe("NCR", () => {
-  test("dashboard shows figures and both charts", async ({ page }) => {
+  test("trend dashboard shows figures and charts", async ({ page }) => {
     await page.goto("/dashboard");
 
-    await expect(page.getByRole("heading", { name: "Operations overview" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "NCR Trend" })).toBeVisible();
     await expect(page.getByText("Open now")).toBeVisible();
-    await expect(page.getByRole("img", { name: /by category/i })).toBeVisible();
+    await expect(page.getByText("NCRs raised by category")).toBeVisible();
+    await expect(page.getByText("Extra cost over time")).toBeVisible();
     await expect(page.getByText("Who raises them")).toBeVisible();
   });
 
@@ -21,10 +22,14 @@ test.describe("NCR", () => {
 
     await page.getByRole("button", { name: "Cause", exact: true }).click();
     await expect(page).toHaveURL(/dimension=cause/);
-    await expect(page.getByText("By cause")).toBeVisible();
+    await expect(page.getByText("NCRs raised by cause")).toBeVisible();
 
-    await page.getByRole("button", { name: "This month" }).click();
-    await expect(page).toHaveURL(/period=month/);
+    await page.getByRole("button", { name: "6 months" }).click();
+    await expect(page).toHaveURL(/range=6months/);
+
+    // Between dates reveals the two date boxes; a period alone must not.
+    await page.getByRole("button", { name: "Between dates" }).click();
+    await expect(page.locator('input[type="date"]')).toHaveCount(2);
   });
 
   test("NCR list filters and opens a record", async ({ page }) => {
