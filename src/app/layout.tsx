@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { APP_NAME } from "@/lib/version";
 import type { ReactNode } from "react";
 /**
@@ -63,8 +64,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           Applies the saved theme before anything paints. Doing it in React
           would render light first and flip on hydrate, which is a visible
           flash on every navigation for anyone using dark.
+
+          next/script rather than a bare <script>: Next injects this into the
+          initial HTML itself, so it still runs while the document is parsed.
+          A script React renders as an element is never executed by the browser
+          on the client, and React warns about exactly that.
         */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <Script id="theme-init" strategy="beforeInteractive">
+          {THEME_INIT_SCRIPT}
+        </Script>
       </head>
       {/*
         The footer lives here rather than in AppShell so it reaches every page,
